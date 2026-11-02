@@ -688,19 +688,18 @@ class MainWindow(QMainWindow):
         if remote_size <= 0:
             self._show_toast("空文件暂不支持预览")
             return
-        cache_path = self._quicklook.get_preview_cache_path(remote_path)
-        if cache_path.exists() and cache_path.stat().st_size == remote_size:
-            self._quicklook.toggle(cache_path)
-            return
-
         if self._preview_worker is not None and self._preview_worker.isRunning():
             return
 
+        serial = get_active_serial()
+        cache_path = self._quicklook.get_preview_cache_path(remote_path, serial)
+        if self._quicklook.current_path() == str(cache_path):
+            self._quicklook.close()
+            return
         name = Path(remote_path).name
         self._show_toast(f"正在加载预览：{name}…")
         self.append_log(f"正在读取手机预览文件：{remote_path}…")
 
-        serial = get_active_serial()
         self._preview_worker = RemotePreviewWorker(
             remote_path, remote_size, str(cache_path), serial=serial, parent=self
         )
@@ -710,6 +709,9 @@ class MainWindow(QMainWindow):
 
     def _on_remote_preview_ready(self, local_cache_path: str) -> None:
         self._hide_toast()
+        if self._preview_worker is not None and self._preview_worker._serial != get_active_serial():
+            self.append_log("预览完成时设备已切换，已忽略旧设备文件")
+            return
         self._quicklook.preview(local_cache_path)
 
     def _on_remote_preview_failed(self, error: str) -> None:
