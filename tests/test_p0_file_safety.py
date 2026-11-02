@@ -78,7 +78,7 @@ class TestPathSafety(unittest.TestCase):
 
 class TestTransferFailures(unittest.TestCase):
     @patch.object(transfer, "format_adb_failure", return_value="failed")
-    @patch.object(transfer, "run_adb_push_quiet")
+    @patch.object(transfer, "push_file_verified")
     def test_failed_parallel_transfer_not_counted_successful(self, mock_push, _):
         def fake_push(src, dst, check=None):
             if src.endswith("fail.txt"):
@@ -128,6 +128,74 @@ class TestTransferFailures(unittest.TestCase):
         self.assertEqual(message, "已取消")
         self.assertTrue(proc.killed)
 
+
+
+
+class TestVerifiedTransferSafety(unittest.TestCase):
+    @patch.object(transfer, "adb_shell")
+    @patch.object(transfer, "remote_sha256", return_value="0" * 64)
+    @patch.object(transfer, "run_adb_push_quiet", return_value=(True, "ok"))
+    def test_upload_hash_mismatch_never_commits(self, _push, _sha, shell):
+        with tempfile.TemporaryDirectory() as td:
+            source = Path(td) / "test.txt"
+            source.write_text("NEW CONTENT")
+            ok, error = transfer.push_file_verified(
+                str(source), "/sdcard/Download/test.txt", lambda: False
+            )
+            self.assertFalse(ok)
+            self.assertIn("SHA-256", error)
+            self.assertFalse(any("mv -f" in call.args[0] for call in shell.call_args_list))
+
+    @patch.object(transfer, "adb_shell")
+    @patch.object(transfer, "remote_sha256")
+    @patch.object(transfer, "run_adb_push_quiet", return_value=(True, "ok"))
+    def test_upload_valid_hash_commits(self, _push, remote_sha, shell):
+        with tempfile.TemporaryDirectory() as td:
+            source = Path(td) / "test.txt"
+            source.write_text("VERIFIED CONTENT")
+            remote_sha.return_value = transfer.local_sha256(source)
+            shell.return_value = CompletedProcess([], 0, "", "")
+            ok, _ = transfer.push_file_verified(
+                str(source), "/sdcard/Download/test.txt", lambda: False
+            )
+            self.assertTrue(ok)
+            self.assertEqual(sum("mv -f" in call.args[0] for call in shell.call_args_list), 1)
+
+    @patch.object(transfer, "remote_sha256", return_value="0" * 64)
+    @patch.object(transfer, "run_adb_pull")
+    def test_download_bad_hash_preserves_existing_local(self, pull, _hash):
+        def fake_pull(remote, local, log, cancel):
+            Path(local).write_text("NEW CONTENT")
+            return True, ["pulled"]
+        pull.side_effect = fake_pull
+        with tempfile.TemporaryDirectory() as td:
+            target = Path(td) / "test.txt"
+            target.write_text("ORIGINAL")
+            ok, errors = transfer.pull_file_verified(
+                "/sdcard/Download/test.txt", target, lambda _: None, lambda: False
+            )
+            self.assertFalse(ok)
+            self.assertEqual(target.read_text(), "ORIGINAL")
+            self.assertFalse(list(Path(td).glob("*.pt-part-*")))
+
+    @patch.object(transfer, "remote_sha256")
+    @patch.object(transfer, "run_adb_pull")
+    def test_download_good_hash_replaces_original(self, pull, remote_sha):
+        def fake_pull(remote, local, log, cancel):
+            Path(local).write_text("NEW VERIFIED")
+            return True, ["pulled"]
+        pull.side_effect = fake_pull
+        with tempfile.TemporaryDirectory() as td:
+            target = Path(td) / "test.txt"
+            target.write_text("ORIGINAL")
+            expected = Path(td) / "expected"
+            expected.write_text("NEW VERIFIED")
+            remote_sha.return_value = transfer.local_sha256(expected)
+            ok, _ = transfer.pull_file_verified(
+                "/sdcard/Download/test.txt", target, lambda _: None, lambda: False
+            )
+            self.assertTrue(ok)
+            self.assertEqual(target.read_text(), "NEW VERIFIED")
 
 
 

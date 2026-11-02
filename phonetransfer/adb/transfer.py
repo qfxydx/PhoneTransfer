@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import posixpath
 import shutil
@@ -11,6 +12,7 @@ import subprocess
 import tempfile
 import threading
 import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Callable
@@ -32,6 +34,7 @@ from phonetransfer.adb.file_ops import (
     iter_local_files,
     manifest_remote_bytes,
     remote_file_size,
+    remote_exists,
     remote_is_dir,
     remote_is_file,
     resolve_local_path,
@@ -72,6 +75,68 @@ def run_adb_push_quiet(
         if proc.poll() is None:
             proc.kill()
             proc.communicate()
+
+
+
+def local_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def remote_sha256(remote: str, byte_count: int) -> str:
+    # Allow sufficient time for large files on slower Android storage.
+    timeout = min(3600, max(60, int(byte_count / (8 * 1024 * 1024)) + 30))
+    res = adb_shell(f"sha256sum {shell_quote(remote)}", timeout=timeout)
+    value = (res.stdout or "").strip().split()
+    if res.returncode != 0 or not value or len(value[0]) != 64:
+        raise RuntimeError("设备无法校验 SHA-256，已保留原文件")
+    return value[0].lower()
+
+
+def push_file_verified(
+    local_path: str,
+    remote_path: str,
+    cancel_check: Callable[[], bool],
+) -> tuple[bool, str]:
+    """Upload to a sibling temp file, verify bytes, then replace atomically.
+
+    A failed or cancelled transfer never starts overwriting the destination.
+    """
+    src = Path(local_path)
+    tmp = (
+        posixpath.dirname(remote_path) + "/.pt-part-"
+        + uuid.uuid4().hex + "-" + posixpath.basename(remote_path)
+    )
+    try:
+        if cancel_check():
+            return False, "已取消"
+        ok, output = run_adb_push_quiet(local_path, tmp, cancel_check)
+        if not ok:
+            return False, output or "上传临时文件失败"
+        if cancel_check():
+            return False, "已取消"
+        if local_sha256(src) != remote_sha256(tmp, src.stat().st_size):
+            return False, "SHA-256 校验失败，原文件未被覆盖"
+        if cancel_check():
+            return False, "已取消"
+        moved = adb_shell(
+            f"mv -f {shell_quote(tmp)} {shell_quote(remote_path)}",
+            timeout=30,
+        )
+        if moved.returncode != 0:
+            return False, (moved.stderr or moved.stdout or "安全替换失败").strip()
+        return True, output
+    except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
+        return False, f"安全上传失败：{exc}"
+    finally:
+        # Only clean up the unique temporary path created by this operation.
+        try:
+            adb_shell(f"rm -f {shell_quote(tmp)}", timeout=10)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
 
 
 def materialize_resolved_tree(manifest: PushManifest, staging: Path) -> int:
@@ -393,19 +458,12 @@ def _push_folder_files_sequential(
             )
         file_bytes = path_size(abs_path)
         if progress:
-            ok, lines = progress.bulk_push(
-                rel,
-                1,
-                file_bytes,
-                cancel_check,
-                lambda src=str(abs_path), dst=remote_file: run_adb_push(
-                    src, dst, log, cancel_check
-                ),
-            )
-        else:
-            ok, lines = run_adb_push(str(abs_path), remote_file, log, cancel_check)
+            progress.report(rel)
+        ok, output = push_file_verified(str(abs_path), remote_file, cancel_check)
         if not ok:
-            return False, format_adb_failure(lines, abs_path, remote_file)
+            return False, "已取消" if cancel_check() else format_adb_failure([output], abs_path, remote_file)
+        if progress:
+            progress.file_completed(rel, file_bytes)
     return True, remote
 
 
@@ -432,7 +490,7 @@ def _push_folder_files_parallel(
         remote_file = f"{remote.rstrip('/')}/{rel}"
         if should_stop():
             return rel, False, "已取消", 0
-        ok, output = run_adb_push_quiet(str(abs_path), remote_file, should_stop)
+        ok, output = push_file_verified(str(abs_path), remote_file, should_stop)
         return rel, ok, output, path_size(abs_path)
 
     with ThreadPoolExecutor(max_workers=PUSH_PARALLEL) as executor:
@@ -490,46 +548,11 @@ def push_folder(
         log("文件夹为空，无需传输")
         return True, remote
 
-    if sync_mode == "overwrite":
-        if manifest.symlink_count == 0:
-            push_args = (f"{local}/.", f"{remote}/", log, cancel_check)
-            if progress:
-                ok, lines = progress.bulk_push(
-                    local.name,
-                    len(manifest.files),
-                    manifest_total_bytes(manifest),
-                    cancel_check,
-                    lambda: run_adb_push(*push_args),
-                )
-            else:
-                ok, lines = run_adb_push(*push_args)
-            if not ok:
-                return False, format_adb_failure(lines, local, remote)
-            return True, remote
-        ok, msg = push_folder_via_staging(
-            local, remote, manifest, log, cancel_check, progress=progress
-        )
-        if ok:
-            return True, msg
-        log("整包传输失败，改为逐文件传输…")
-        return push_folder_files(
-            local,
-            remote,
-            sync_mode,
-            log,
-            cancel_check,
-            manifest=manifest,
-            progress=progress,
-        )
-
+    # Always use per-file staging and verification, including overwrite mode.
+    # Bulk adb push directly into existing files can corrupt them if interrupted.
     return push_folder_files(
-        local,
-        remote,
-        sync_mode,
-        log,
-        cancel_check,
-        manifest=manifest,
-        progress=progress,
+        local, remote, sync_mode, log, cancel_check,
+        manifest=manifest, progress=progress,
     )
 
 
@@ -573,19 +596,14 @@ def push_one(
     push_src, push_dst = str(src), remote
     file_bytes = path_size(src)
     if progress:
-        ok, adb_lines = progress.bulk_push(
-            src.name,
-            1,
-            file_bytes,
-            cancel_check,
-            lambda: run_adb_push(push_src, push_dst, log, cancel_check),
-        )
-    else:
-        ok, adb_lines = run_adb_push(push_src, push_dst, log, cancel_check)
+        progress.report(src.name)
+    ok, output = push_file_verified(push_src, push_dst, cancel_check)
     if not ok:
-        if cancel_check():
+        if cancel_check() or output == "已取消":
             return False, "已取消"
-        return False, format_adb_failure(adb_lines, src, remote)
+        return False, format_adb_failure([output], src, remote)
+    if progress:
+        progress.file_completed(src.name, file_bytes)
 
     try:
         check = adb_shell(f"ls -lh {shell_quote(remote)}", timeout=30)
@@ -630,26 +648,64 @@ def format_pull_failure(lines: list[str], remote: str, local: Path) -> str:
 def run_adb_pull(
     remote_path: str, local_path: str, log, cancel_check
 ) -> tuple[bool, list[str]]:
-    proc = subprocess.Popen(
-        adb_cmd("pull", remote_path, local_path),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
-    )
-    assert proc.stdout is not None
-    lines: list[str] = []
-    for line in proc.stdout:
-        if cancel_check():
+    try:
+        proc = subprocess.Popen(
+            adb_cmd("pull", remote_path, local_path),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    except OSError as exc:
+        return False, [str(exc)]
+    try:
+        while True:
+            if cancel_check():
+                proc.kill()
+                proc.communicate()
+                return False, ["已取消"]
+            try:
+                stdout, stderr = proc.communicate(timeout=0.25)
+                lines = [line for line in (stdout + "\n" + stderr).splitlines() if line.strip()]
+                for line in lines:
+                    log(line)
+                return proc.returncode == 0, lines
+            except subprocess.TimeoutExpired:
+                continue
+    finally:
+        if proc.poll() is None:
             proc.kill()
+            proc.communicate()
+
+
+def pull_file_verified(
+    remote: str, local_target: Path, log, cancel_check
+) -> tuple[bool, list[str]]:
+    """Never damage a pre-existing Mac file on failed/cancelled ADB pull."""
+    temp = local_target.with_name(
+        f".{local_target.name}.pt-part-{uuid.uuid4().hex}"
+    )
+    try:
+        if cancel_check():
+            return False, ["已取消"]
+        ok, lines = run_adb_pull(remote, str(temp), log, cancel_check)
+        if not ok:
             return False, lines
-        line = line.rstrip()
-        if line:
-            lines.append(line)
-            log(line)
-    if proc.wait() != 0:
-        return False, lines
-    return True, lines
+        if cancel_check():
+            return False, ["已取消"]
+        digest = remote_sha256(remote, temp.stat().st_size)
+        if local_sha256(temp) != digest:
+            return False, ["SHA-256 校验失败，电脑原文件未被覆盖"]
+        if cancel_check():
+            return False, ["已取消"]
+        os.replace(temp, local_target)
+        return True, lines
+    except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
+        return False, [f"安全下载失败：{exc}"]
+    finally:
+        try:
+            temp.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def find_pull_folder_conflicts(remote: str, dest: str) -> list[str]:
@@ -723,19 +779,12 @@ def pull_folder_files(
                 sync_mode="keep_both",
             )
         if progress:
-            ok, lines = progress.bulk_pull(
-                rel,
-                1,
-                size,
-                cancel_check,
-                lambda rf=remote_file, lf=str(local_file): run_adb_pull(
-                    rf, lf, log, cancel_check
-                ),
-            )
-        else:
-            ok, lines = run_adb_pull(remote_file, str(local_file), log, cancel_check)
+            progress.report(rel)
+        ok, lines = pull_file_verified(remote_file, local_file, log, cancel_check)
         if not ok:
-            return False, format_pull_failure(lines, remote_file, local_file)
+            return False, "已取消" if cancel_check() else format_pull_failure(lines, remote_file, local_file)
+        if progress:
+            progress.file_completed(rel, size)
     return True, str(local)
 
 
@@ -765,26 +814,11 @@ def pull_folder(
         return False, msg
     local_target.mkdir(parents=True, exist_ok=True)
 
-    if sync_mode == "overwrite":
-        pull_args = (f"{remote}/.", f"{local_target}/", log, cancel_check)
-        if progress:
-            ok, lines = progress.bulk_pull(
-                name,
-                len(manifest.files),
-                manifest_remote_bytes(manifest),
-                cancel_check,
-                lambda: run_adb_pull(*pull_args),
-            )
-        else:
-            ok, lines = run_adb_pull(*pull_args)
-        if not ok:
-            return False, format_pull_failure(
-                lines, remote, Path(local_dest) / name
-            )
-        return True, str(local_target)
-
+    # Avoid bulk pull into an existing folder: a partial transfer could
+    # otherwise corrupt files that were already present on the Mac.
     return pull_folder_files(
-        remote, local_target, manifest, sync_mode, log, cancel_check, progress=progress
+        remote, local_target, manifest, sync_mode, log, cancel_check,
+        progress=progress,
     )
 
 
@@ -833,18 +867,13 @@ def pull_one(
     local_target.parent.mkdir(parents=True, exist_ok=True)
     file_bytes = remote_file_size(remote)
     if progress:
-        ok, lines = progress.bulk_pull(
-            name,
-            1,
-            file_bytes,
-            cancel_check,
-            lambda: run_adb_pull(remote, str(local_target), log, cancel_check),
-        )
-    else:
-        ok, lines = run_adb_pull(remote, str(local_target), log, cancel_check)
+        progress.report(name)
+    ok, lines = pull_file_verified(remote, local_target, log, cancel_check)
     if not ok:
-        if cancel_check():
+        if cancel_check() or "已取消" in lines:
             return False, "已取消"
         return False, format_pull_failure(lines, remote, local_target)
+    if progress:
+        progress.file_completed(name, file_bytes)
     return True, str(local_target)
 
