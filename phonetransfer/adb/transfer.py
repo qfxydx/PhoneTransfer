@@ -110,6 +110,7 @@ def push_file_verified(
         posixpath.dirname(remote_path) + "/.pt-part-"
         + uuid.uuid4().hex + "-" + posixpath.basename(remote_path)
     )
+    committed = False
     try:
         if cancel_check():
             return False, "已取消"
@@ -128,15 +129,17 @@ def push_file_verified(
         )
         if moved.returncode != 0:
             return False, (moved.stderr or moved.stdout or "安全替换失败").strip()
+        committed = True
         return True, output
     except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
         return False, f"安全上传失败：{exc}"
     finally:
         # Only clean up the unique temporary path created by this operation.
-        try:
-            adb_shell(f"rm -f {shell_quote(tmp)}", timeout=10)
-        except (OSError, subprocess.TimeoutExpired):
-            pass
+        if not committed:
+            try:
+                adb_shell(f"rm -f {shell_quote(tmp)}", timeout=10)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
 
 
 def materialize_resolved_tree(manifest: PushManifest, staging: Path) -> int:
@@ -431,8 +434,12 @@ def push_folder_files(
         return _push_folder_files_sequential(
             files, remote, sync_mode, log, cancel_check, progress=progress
         )
+    # One manifest request avoids an extra existence probe per file. On retry,
+    # completed, bit-for-bit-identical files can be safely skipped.
+    existing_files = list_remote_relative_files(remote)
     return _push_folder_files_parallel(
-        files, remote, local, log, cancel_check, progress=progress
+        files, remote, local, log, cancel_check,
+        progress=progress, existing_files=existing_files,
     )
 
 
@@ -475,6 +482,7 @@ def _push_folder_files_parallel(
     cancel_check,
     *,
     progress: FileProgressTracker | None = None,
+    existing_files: set[str] | None = None,
 ) -> tuple[bool, str]:
     total = len(files)
     done = 0
@@ -490,6 +498,14 @@ def _push_folder_files_parallel(
         remote_file = f"{remote.rstrip('/')}/{rel}"
         if should_stop():
             return rel, False, "已取消", 0
+        if existing_files is not None and rel in existing_files:
+            try:
+                if local_sha256(abs_path) == remote_sha256(remote_file, abs_path.stat().st_size):
+                    return rel, True, "已校验一致，跳过传输", path_size(abs_path)
+            except (OSError, RuntimeError, subprocess.TimeoutExpired):
+                # If the old remote item cannot be verified, the staged upload
+                # will safely replace it rather than trusting its name/size.
+                pass
         ok, output = push_file_verified(str(abs_path), remote_file, should_stop)
         return rel, ok, output, path_size(abs_path)
 
@@ -506,6 +522,8 @@ def _push_folder_files_parallel(
                 continue
             rel, ok, output, size = future.result()
             done += 1
+            if ok and output == "已校验一致，跳过传输":
+                log(f"复用已校验文件：{rel}")
             if not ok and failed is None:
                 failed = (rel, output)
                 stop.set()

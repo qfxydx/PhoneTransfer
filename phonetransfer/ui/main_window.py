@@ -1018,7 +1018,8 @@ class MainWindow(QMainWindow):
         self.refresh_device(manual=False)
 
     def refresh_device(self, *, manual: bool = False) -> None:
-        if self._closing or self._device_worker is None:
+        # Keep the target device pinned for the lifetime of a transfer.
+        if self._busy or self._closing or self._device_worker is None:
             return
         if self._device_probe_busy and not manual:
             return
@@ -1059,6 +1060,11 @@ class MainWindow(QMainWindow):
         if gen != self._device_gen:
             return
         self._device_probe_busy = False
+        if self._busy:
+            # An earlier in-flight probe must not change the active ADB
+            # target while a transfer is using it.
+            self.btn_refresh.setEnabled(True)
+            return
         devices = payload.get("devices") or []
         usb_phones = payload.get("usb_phones") or []
         manual = self._pending_device_manual
@@ -1174,6 +1180,9 @@ class MainWindow(QMainWindow):
         if gen != self._device_gen:
             return
         self._device_probe_busy = False
+        if self._busy:
+            self.btn_refresh.setEnabled(True)
+            return
         manual = self._pending_device_manual
         self.btn_refresh.setEnabled(True)
         if not manual:

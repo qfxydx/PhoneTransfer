@@ -4,7 +4,7 @@ import time
 import unittest
 from pathlib import Path
 from subprocess import CompletedProcess
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from phonetransfer.adb import file_ops, transfer
 
@@ -196,6 +196,107 @@ class TestVerifiedTransferSafety(unittest.TestCase):
             )
             self.assertTrue(ok)
             self.assertEqual(target.read_text(), "NEW VERIFIED")
+
+
+
+    @patch.object(transfer.subprocess, "Popen")
+    def test_download_cancellation_kills_stalled_adb(self, popen):
+        class Stalled:
+            def __init__(self):
+                self.attempts = 0
+                self.killed = False
+                self.returncode = None
+
+            def communicate(self, timeout=None):
+                if self.killed:
+                    return "", ""
+                self.attempts += 1
+                raise transfer.subprocess.TimeoutExpired(["adb", "pull"], timeout)
+
+            def kill(self):
+                self.killed = True
+                self.returncode = -9
+
+            def poll(self):
+                return self.returncode
+
+        proc = Stalled()
+        popen.return_value = proc
+        ok, errors = transfer.run_adb_pull(
+            "/sdcard/Download/file.txt", "/tmp/pt-test-file.txt",
+            lambda _: None, lambda: proc.attempts >= 2,
+        )
+        self.assertFalse(ok)
+        self.assertEqual(errors, ["已取消"])
+        self.assertTrue(proc.killed)
+
+
+class TestVerifiedFolderResume(unittest.TestCase):
+    @patch.object(transfer, "push_file_verified", return_value=(True, "ok"))
+    @patch.object(transfer, "remote_sha256")
+    def test_completed_files_skipped_only_when_hashes_match(self, remote_hash, push):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            first, second = root / "first.txt", root / "second.txt"
+            first.write_text("FIRST")
+            second.write_text("SECOND")
+            remote_hash.return_value = transfer.local_sha256(first)
+            log = []
+            progress = transfer.FileProgressTracker(11, 2, lambda *args: None)
+            ok, _ = transfer._push_folder_files_parallel(
+                [(first, "first.txt"), (second, "second.txt")],
+                "/sdcard/Download", root, log.append, lambda: False,
+                progress=progress, existing_files={"first.txt"},
+            )
+            self.assertTrue(ok)
+            self.assertEqual(push.call_count, 1)
+            self.assertTrue(push.call_args.args[0].endswith("second.txt"))
+            self.assertTrue(any("复用已校验文件" in entry for entry in log))
+            self.assertEqual(progress.done_files, 2)
+
+
+class TestDeviceSelectionDuringTransfer(unittest.TestCase):
+    @staticmethod
+    def busy_window():
+        win = Mock()
+        win._busy = True
+        win._closing = False
+        win._device_gen = 9
+        win._device_probe_busy = True
+        return win
+
+    def test_pending_device_success_does_not_switch_target(self):
+        from phonetransfer.ui.main_window import MainWindow
+        from phonetransfer.adb.core import get_active_serial, set_active_serial
+        old = get_active_serial()
+        try:
+            set_active_serial("emulator-5554")
+            win = self.busy_window()
+            MainWindow._on_device_ok(win, {"devices": [
+                {"serial": "other-device", "state": "device"}]}, 9)
+            self.assertEqual(get_active_serial(), "emulator-5554")
+            self.assertFalse(win._device_probe_busy)
+        finally:
+            set_active_serial(old)
+
+    def test_pending_device_failure_does_not_clear_target(self):
+        from phonetransfer.ui.main_window import MainWindow
+        from phonetransfer.adb.core import get_active_serial, set_active_serial
+        old = get_active_serial()
+        try:
+            set_active_serial("emulator-5554")
+            win = self.busy_window()
+            MainWindow._on_device_fail(win, "disconnected", 9)
+            self.assertEqual(get_active_serial(), "emulator-5554")
+            self.assertFalse(win._device_probe_busy)
+        finally:
+            set_active_serial(old)
+
+    def test_manual_refresh_blocked_while_busy(self):
+        from phonetransfer.ui.main_window import MainWindow
+        win = self.busy_window()
+        MainWindow.refresh_device(win, manual=True)
+        win._device_worker.probe.assert_not_called()
 
 
 
