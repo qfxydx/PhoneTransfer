@@ -24,7 +24,8 @@ assignees: ''
 <!-- 实际发生的异常结果，例如报错提示、传输中断等 -->
 
 ### 5. PhoneTransfer 版本 (PhoneTransfer Version)
-- [ ] v1.0.1 (最新 DMG / 源码运行)
+- [ ] v1.0.2 (最新 DMG)
+- [ ] v1.0.1 (历史 DMG)
 - [ ] v1.0.0 (早期构建 DMG)
 - [ ] Git commit SHA: 
 

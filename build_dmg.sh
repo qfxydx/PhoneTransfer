@@ -6,23 +6,22 @@ echo "=== Building PhoneTransfer.app and DMG ==="
 DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$DIR"
 
-# 1. Clean previous build artifacts
-rm -rf dist/dmg_root dist/*.dmg
-
-# 2. Prepare DMG root
-mkdir -p dist/dmg_root
-cp -R dist/PhoneTransfer.app dist/dmg_root/
-ln -s /Applications dist/dmg_root/Applications
-
-# 3. Create compressed DMG using native hdiutil
-DMG_NAME="PhoneTransfer-v1.0.1-macOS.dmg"
-hdiutil create -volname "PhoneTransfer" \
-  -srcfolder dist/dmg_root \
-  -ov -format UDZO \
-  "dist/${DMG_NAME}"
-
-# 4. Clean temporary dmg_root
-rm -rf dist/dmg_root
+# Preserve previous releases; refuse to overwrite an existing DMG.
+DMG_NAME="PhoneTransfer-v1.0.2-macOS.dmg"
+if [ -e "dist/${DMG_NAME}" ]; then
+  echo "Refusing to overwrite dist/${DMG_NAME}" >&2
+  exit 1
+fi
+APP_BUNDLE="dist/v1.0.2-build/PhoneTransfer.app"
+if [ ! -d "${APP_BUNDLE}" ]; then
+  echo "Missing ${APP_BUNDLE}; build version 1.0.2 first" >&2
+  exit 1
+fi
+DMG_ROOT="$(mktemp -d "${DIR}/dist/.dmg-root.XXXXXX")"
+trap 'rm -rf "${DMG_ROOT}"' EXIT
+cp -R "${APP_BUNDLE}" "${DMG_ROOT}/PhoneTransfer.app"
+ln -s /Applications "${DMG_ROOT}/Applications"
+hdiutil create -volname "PhoneTransfer"   -srcfolder "${DMG_ROOT}"   -format UDZO   "dist/${DMG_NAME}"
 
 echo "=== Successfully built: dist/${DMG_NAME} ==="
 ls -lh "dist/${DMG_NAME}"

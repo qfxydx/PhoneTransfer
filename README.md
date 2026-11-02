@@ -5,8 +5,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/qfxydx/PhoneTransfer/releases/tag/v1.0.1"><img src="https://img.shields.io/badge/DMG-v1.0.1%20(Latest)-blue?style=flat-square&logo=apple" alt="Download DMG" /></a>
-  <a href="https://github.com/qfxydx/PhoneTransfer/releases/tag/v1.0.0"><img src="https://img.shields.io/badge/DMG-v1.0.0%20(Legacy)-gray?style=flat-square" alt="Legacy DMG Release" /></a>
+  <a href="https://github.com/qfxydx/PhoneTransfer/releases/download/v1.0.2/PhoneTransfer-v1.0.2-macOS.dmg"><img src="https://img.shields.io/badge/DMG-v1.0.2%20(Latest)-blue?style=flat-square&logo=apple" alt="Download DMG" /></a>
+  <a href="https://github.com/qfxydx/PhoneTransfer/releases/tag/v1.0.1"><img src="https://img.shields.io/badge/DMG-v1.0.1%20(Legacy)-gray?style=flat-square" alt="Legacy DMG Release" /></a>
   <img src="https://img.shields.io/badge/Platform-macOS-black?style=flat-square&logo=apple" alt="Platform" />
   <img src="https://img.shields.io/badge/Python-3.10%2B-blue?style=flat-square&logo=python" alt="Python" />
   <img src="https://img.shields.io/badge/GUI-PySide6%20%2F%20Qt-green?style=flat-square&logo=qt" alt="GUI" />
@@ -83,8 +83,9 @@
 
 ### 1. 最新稳定版 DMG 安装包（推荐普通用户）
 
-- **最新安装包直接下载**：**[`PhoneTransfer-v1.0.1-macOS.dmg`](https://github.com/qfxydx/PhoneTransfer/releases/download/v1.0.1/PhoneTransfer-v1.0.1-macOS.dmg)**（~54 MB）
-- **发布详情页面**：[PhoneTransfer v1.0.1 Release](https://github.com/qfxydx/PhoneTransfer/releases/tag/v1.0.1)
+- **最新安装包直接下载**：**[`PhoneTransfer-v1.0.2-macOS.dmg`](https://github.com/qfxydx/PhoneTransfer/releases/download/v1.0.2/PhoneTransfer-v1.0.2-macOS.dmg)**（~54 MB）
+- **发布详情页面**：[PhoneTransfer v1.0.2 Release](https://github.com/qfxydx/PhoneTransfer/releases/tag/v1.0.2)
+- **本次修复**：修复 macOS 点击「选择文件…」后可能出现的界面无响应；取消操作不会再次打开文件选择窗口，并加强了文件选择进程退出时的状态处理。
 - **安装步骤**：
   1. 下载 DMG 镜像文件后双击打开；
   2. 将 **`PhoneTransfer.app`** 拖拽复制到右侧的 **`Applications`** 应用程序文件夹；
@@ -93,7 +94,8 @@
 ### 2. 开发者源码运行与历史版本
 
 - **源码运行**：支持直接使用 Python 源码运行体验最新更新（详见下方「源码运行与使用前提」）。
-- **历史版本归档**：历史版本可前往 [PhoneTransfer v1.0.0 Release](https://github.com/qfxydx/PhoneTransfer/releases/tag/v1.0.0) 查看（注意早期构建不包含 v1.0.1 的安全与稳定性加固）。
+- **历史版本**：[v1.0.1 安全更新（未包含本次文件选择器修复）](https://github.com/qfxydx/PhoneTransfer/releases/tag/v1.0.1) / [v1.0.0 早期版本](https://github.com/qfxydx/PhoneTransfer/releases/tag/v1.0.0)。
+- **安装包安全提示**：当前版本尚未通过 Apple Developer ID 签名及公证。仅从本项目 GitHub Release 下载，并按 macOS 系统安全流程确认应用来源；不建议关闭系统整体安全防护。
 
 ---
 
