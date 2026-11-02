@@ -3,9 +3,8 @@
 cd "$(dirname "$0")"
 export PATH="$HOME/Library/Android/sdk/platform-tools:$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 
-# 结束旧进程（含误开的网页服务）
-pkill -f "PhoneTransfer/phone_transfer.py" 2>/dev/null || true
-lsof -ti tcp:8765 | xargs kill -9 2>/dev/null || true
+# Do not force-kill unrelated processes or other applications on port 8765.
+# Launching PhoneTransfer must never terminate users' running programs.
 
 PY=""
 # 优先用已安装 PySide6 的 python

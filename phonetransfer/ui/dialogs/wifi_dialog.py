@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from phonetransfer.adb.core import get_active_serial
 from phonetransfer.workers.base import _UI
 from phonetransfer.workers.wifi_worker import WifiActionWorker
 
@@ -52,10 +53,11 @@ class WifiConnectDialog(QDialog):
         ul.setSpacing(10)
 
         usb_hint = QLabel(
-            "如果觉得配对码繁琐，可通过数据线一键开启无线：\n"
-            "1. 用数据线将手机连接到电脑，并在手机上允许调试；\n"
-            "2. 点击下方按钮，系统自动开启无线端口并建立连接；\n"
-            "3. 成功后即可拔掉数据线，随时无线传输！"
+            "经典 TCP ADB 模式（端口 5555），仅限可信私有网络。\n"
+            "手机端的 TCP 调试可能在拔掉 USB 后继续监听；"
+            "建议优先使用 Android 11+ 的配对码无线调试。\n"
+            "使用完毕后必须选择关闭经典无线调试，"
+            "单纯断开电脑连接并不能关闭手机监听端口。"
         )
         usb_hint.setWordWrap(True)
         usb_hint.setStyleSheet("color: gray; font-size: 12px;")
@@ -64,6 +66,14 @@ class WifiConnectDialog(QDialog):
         self.btn_usb_to_wifi = QPushButton("⚡ 插线一键开启无线并连接")
         self.btn_usb_to_wifi.clicked.connect(self._do_usb_to_wifi)
         ul.addWidget(self.btn_usb_to_wifi)
+
+        self.btn_disable_tcpip = QPushButton("关闭已选设备的经典无线调试（5555）")
+        selected = get_active_serial() or ""
+        self.btn_disable_tcpip.setEnabled(WifiActionWorker._classic_wifi_target(selected))
+        if not self.btn_disable_tcpip.isEnabled():
+            self.btn_disable_tcpip.setToolTip("先在主界面选择已连接的 IP:5555 无线设备")
+        self.btn_disable_tcpip.clicked.connect(self._do_disable_tcpip)
+        ul.addWidget(self.btn_disable_tcpip)
 
         self.usb_to_wifi_result = QLabel("")
         self.usb_to_wifi_result.setWordWrap(True)
@@ -159,10 +169,14 @@ class WifiConnectDialog(QDialog):
         self.btn_manual_connect.setEnabled(not busy)
         self.btn_pair.setEnabled(not busy)
         self.btn_usb_to_wifi.setEnabled(not busy)
+        serial = get_active_serial() or ""
+        self.btn_disable_tcpip.setEnabled(
+            not busy and WifiActionWorker._classic_wifi_target(serial)
+        )
         self.btn_close.setEnabled(not busy)
 
     def _start_worker(
-        self, action: Literal["connect", "pair", "usb_to_wifi"], params: dict
+        self, action: Literal["connect", "pair", "usb_to_wifi", "disable_tcpip"], params: dict
     ) -> None:
         if self._worker is not None and self._worker.isRunning():
             return
@@ -196,11 +210,10 @@ class WifiConnectDialog(QDialog):
             if action == "connect":
                 QTimer.singleShot(600, self.accept)
             elif action == "usb_to_wifi":
-                QMessageBox.information(
-                    self,
-                    "无线开启成功",
-                    f"{msg}\n\n现在您可以拔掉数据线，即可进行无线文件传输！",
-                )
+                QMessageBox.information(self, "无线连接成功", msg)
+                self.accept()
+            elif action == "disable_tcpip":
+                QMessageBox.information(self, "经典无线调试已关闭", msg)
                 self.accept()
 
     def _manual_connect(self) -> None:
@@ -224,17 +237,38 @@ class WifiConnectDialog(QDialog):
         self._start_worker("pair", {"ip": ip, "port": port, "code": code})
 
     def _do_usb_to_wifi(self) -> None:
-        self._start_worker("usb_to_wifi", {})
+        confirm = QMessageBox.warning(
+            self, "启用经典无线调试",
+            "这会在手机上开启经典 TCP ADB 5555 监听端口。"
+            "拔线或关闭 PhoneTransfer 不一定会关闭该端口。\n\n"
+            "请仅在你信任的私人 Wi-Fi 上使用，结束后明确关闭经典无线调试。"
+            "建议优先使用 Android 11+ 的配对码模式。\n\n确定要开启吗？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if confirm != QMessageBox.StandardButton.Yes:
+            return
+        serial = get_active_serial()
+        # Never silently switch targets if several USB devices are connected.
+        self._start_worker("usb_to_wifi", {"serial": serial} if serial else {})
+
+    def _do_disable_tcpip(self) -> None:
+        serial = get_active_serial() or ""
+        if not WifiActionWorker._classic_wifi_target(serial):
+            self.usb_to_wifi_result.setText("请先在主界面选择 IP:5555 设备")
+            return
+        self._start_worker("disable_tcpip", {"serial": serial})
 
     def closeEvent(self, event: QCloseEvent) -> None:
         if self._worker is not None and self._worker.isRunning():
-            self._worker.terminate()
-            self._worker.wait(1000)
+            # terminate() could kill a thread after it enabled TCP debugging
+            # but before its rollback/cleanup code has executed.
+            event.ignore()
+            return
         super().closeEvent(event)
 
     def reject(self) -> None:
         if self._worker is not None and self._worker.isRunning():
-            self._worker.terminate()
-            self._worker.wait(1000)
+            return
         super().reject()
 

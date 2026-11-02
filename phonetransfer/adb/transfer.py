@@ -229,45 +229,15 @@ class FileProgressTracker:
         cancel_check,
         push_fn: Callable[[], tuple[bool, list[str]]],
     ) -> tuple[bool, list[str]]:
-        if batch_bytes <= 0 and file_count <= 0:
-            return push_fn()
-
-        base_bytes = self.done_bytes
-        base_files = self.done_files
-        stop = threading.Event()
-
-        def estimate() -> None:
-            start = time.monotonic()
-            estimate_secs = batch_bytes / (35 * 1024 * 1024) if batch_bytes else 1.0
-            estimate_secs = max(estimate_secs, 0.5)
-            while not stop.wait(0.3):
-                if cancel_check():
-                    return
-                elapsed = time.monotonic() - start
-                fraction = min(0.97, elapsed / estimate_secs)
-                est_bytes = base_bytes + int(batch_bytes * fraction)
-                with self._lock:
-                    self._emit(
-                        min(est_bytes, self.total_bytes),
-                        self.total_bytes,
-                        base_files,
-                        self.total_files,
-                        name,
-                    )
-
+        """Report confirmed data only; do not invent byte progress from elapsed time."""
+        if cancel_check():
+            return False, ["已取消"]
         self.report(name)
-        thread = threading.Thread(target=estimate, daemon=True)
-        thread.start()
-        try:
-            ok, lines = push_fn()
-        finally:
-            stop.set()
-            thread.join(timeout=1.0)
-        if ok:
-            with self._lock:
-                self.done_bytes = min(base_bytes + batch_bytes, self.total_bytes)
-                self.done_files = min(base_files + file_count, self.total_files)
-                self._emit_progress(name)
+        ok, lines = push_fn()
+        if ok and not cancel_check():
+            self.file_completed(name, batch_bytes, count=file_count)
+        elif ok:
+            return False, ["已取消"]
         return ok, lines
 
     def bulk_pull(
