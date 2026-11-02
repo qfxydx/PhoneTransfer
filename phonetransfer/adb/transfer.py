@@ -42,14 +42,36 @@ from phonetransfer.constants import FolderSyncMode, PUSH_PARALLEL
 from phonetransfer.utils import path_size
 
 
-def run_adb_push_quiet(local_path: str, remote_path: str) -> tuple[bool, str]:
-    proc = subprocess.run(
-        adb_cmd("push", local_path, remote_path),
-        capture_output=True,
-        text=True,
-    )
-    output = f"{proc.stdout or ''}{proc.stderr or ''}".strip()
-    return proc.returncode == 0, output
+def run_adb_push_quiet(
+    local_path: str,
+    remote_path: str,
+    cancel_check: Callable[[], bool] | None = None,
+) -> tuple[bool, str]:
+    """Parallel uploads must be cancellable even when adb emits no output."""
+    try:
+        proc = subprocess.Popen(
+            adb_cmd("push", local_path, remote_path),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    except OSError as exc:
+        return False, str(exc)
+    try:
+        while True:
+            if cancel_check is not None and cancel_check():
+                proc.kill()
+                proc.communicate()
+                return False, "已取消"
+            try:
+                stdout, stderr = proc.communicate(timeout=0.25)
+                return proc.returncode == 0, f"{stdout or ''}{stderr or ''}".strip()
+            except subprocess.TimeoutExpired:
+                continue
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.communicate()
 
 
 def materialize_resolved_tree(manifest: PushManifest, staging: Path) -> int:
@@ -400,11 +422,17 @@ def _push_folder_files_parallel(
     done = 0
     milestone = max(1, total // 10)
     failed: tuple[str, str] | None = None
+    stop = threading.Event()
+
+    def should_stop() -> bool:
+        return stop.is_set() or cancel_check()
 
     def push_one(item: tuple[Path, str]) -> tuple[str, bool, str, int]:
         abs_path, rel = item
         remote_file = f"{remote.rstrip('/')}/{rel}"
-        ok, output = run_adb_push_quiet(str(abs_path), remote_file)
+        if should_stop():
+            return rel, False, "已取消", 0
+        ok, output = run_adb_push_quiet(str(abs_path), remote_file, should_stop)
         return rel, ok, output, path_size(abs_path)
 
     with ThreadPoolExecutor(max_workers=PUSH_PARALLEL) as executor:
@@ -412,17 +440,23 @@ def _push_folder_files_parallel(
         for future in as_completed(futures):
             if cancel_check():
                 failed = ("", "已取消")
+                stop.set()
                 for pending in futures:
                     pending.cancel()
                 break
+            if future.cancelled():
+                continue
             rel, ok, output, size = future.result()
             done += 1
             if not ok and failed is None:
                 failed = (rel, output)
-            if progress:
+                stop.set()
+                for pending in futures:
+                    pending.cancel()
+            if progress and ok:
                 progress.file_completed(rel, size)
-            elif done % milestone == 0 or done == total:
-                log(f"已传输 {done}/{total}（{done * 100 // total}%）")
+            elif progress is None and (done % milestone == 0 or done == total):
+                log(f"已处理 {done}/{total} 个文件")
 
     if failed:
         rel, output = failed

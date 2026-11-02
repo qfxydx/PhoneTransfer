@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import os
 import posixpath
+import re
 import shutil
 from dataclasses import dataclass
 from datetime import datetime
@@ -132,11 +133,11 @@ def resolve_remote_dir(remote_dir: str) -> str:
 
 def remote_mkdir(remote_dir: str) -> tuple[bool, str]:
     """在手机端内部存储中安全创建新文件夹。"""
-    target = remote_dir.strip().rstrip("/")
-    if not target:
-        return False, "文件夹路径不能为空"
-    if not (target.startswith("/sdcard/") or target.startswith("/storage/")):
-        return False, "仅允许在手机内部存储 (/sdcard/ 或 /storage/) 内创建文件夹"
+    try:
+        target = validate_remote_storage_path(remote_dir)
+        validate_existing_remote_storage_path(posixpath.dirname(target))
+    except Exception as exc:
+        return False, f"拒绝不安全的新建目录路径：{exc}"
 
     base_name = posixpath.basename(target)
     if not base_name or any(c in base_name for c in ("\0", ":", "*", "?", '"', "<", ">", "|", "\\")):
@@ -151,14 +152,13 @@ def remote_mkdir(remote_dir: str) -> tuple[bool, str]:
 
 def remote_rename(old_path: str, new_path: str) -> tuple[bool, str]:
     """在手机端重命名文件或文件夹，并同步刷新媒体库。"""
-    old_p = old_path.strip().rstrip("/")
-    new_p = new_path.strip().rstrip("/")
-    if not old_p or not new_p:
-        return False, "路径不能为空"
-    if not (old_p.startswith("/sdcard/") or old_p.startswith("/storage/")):
-        return False, "仅允许重命名手机内部存储中的项目"
-    if not (new_p.startswith("/sdcard/") or new_p.startswith("/storage/")):
-        return False, "目标路径不合法"
+    try:
+        old_p = validate_remote_storage_path(old_path)
+        new_p = validate_remote_storage_path(new_path)
+        validate_existing_remote_storage_path(posixpath.dirname(old_p))
+        validate_existing_remote_storage_path(posixpath.dirname(new_p))
+    except Exception as exc:
+        return False, f"拒绝不安全的重命名路径：{exc}"
     if old_p == new_p:
         return True, ""
 
@@ -181,6 +181,43 @@ def remote_rename(old_path: str, new_path: str) -> tuple[bool, str]:
             pass
 
     return True, ""
+
+
+_SAFE_STORAGE_ROOTS = ("/sdcard", "/storage/emulated/0", "/storage/self/primary")
+_REMOVABLE_STORAGE_ROOT = re.compile(r"^/storage/[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}$")
+
+
+def validate_remote_storage_path(path: str) -> str:
+    """Validate an absolute file path *below* an Android shared-storage root.
+
+    Reject traversal rather than normalizing it: a benign-looking prefix such as
+    /sdcard/Download/../../data would otherwise escape the shared-storage area.
+    """
+    if not isinstance(path, str) or not path or any(ord(ch) < 32 for ch in path):
+        raise ValueError("路径为空或包含控制字符")
+    cleaned = path.rstrip("/")
+    if not cleaned.startswith("/") or posixpath.normpath(cleaned) != cleaned:
+        raise ValueError("路径不是规范的绝对路径")
+    if any(part in (".", "..") for part in cleaned.split("/")):
+        raise ValueError("路径包含不安全的相对目录")
+    for root in _SAFE_STORAGE_ROOTS:
+        if cleaned.startswith(root + "/"):
+            return cleaned
+    parts = cleaned.split("/")
+    if len(parts) >= 4 and _REMOVABLE_STORAGE_ROOT.fullmatch("/".join(parts[:3])):
+        return cleaned
+    raise ValueError("仅允许操作手机共享存储目录中的项目")
+
+
+def validate_existing_remote_storage_path(path: str) -> None:
+    """Block symlink escapes before destructive operations (fail closed)."""
+    result = adb_shell(f"readlink -f {shell_quote(path)}", timeout=10)
+    if result.returncode != 0 or len(result.stdout.splitlines()) != 1:
+        raise ValueError("无法验证手机端路径真实位置，已拒绝危险操作")
+    try:
+        validate_remote_storage_path(result.stdout.strip())
+    except ValueError as exc:
+        raise ValueError("目标路径解析后超出共享存储安全范围") from exc
 
 
 FORBIDDEN_DELETE_PATHS = {
@@ -208,17 +245,13 @@ def remote_delete(paths: list[str]) -> tuple[bool, str]:
 
     valid_paths: list[str] = []
     for p in paths:
-        cleaned = p.strip().rstrip("/")
-        if not cleaned:
-            continue
-        if cleaned in FORBIDDEN_DELETE_PATHS:
-            return False, f"禁止删除系统或存储根目录：{cleaned}"
-        if not (cleaned.startswith("/sdcard/") or cleaned.startswith("/storage/")):
-            return False, f"仅允许删除手机内部存储的项目：{cleaned}"
-        rel_sdcard = posixpath.relpath(cleaned, "/sdcard")
-        rel_storage = posixpath.relpath(cleaned, "/storage/emulated/0")
-        if rel_sdcard in (".", "..", "/") and rel_storage in (".", "..", "/"):
-            return False, f"禁止删除根存储目录：{cleaned}"
+        try:
+            cleaned = validate_remote_storage_path(p)
+            if cleaned in FORBIDDEN_DELETE_PATHS:
+                raise ValueError("禁止删除存储根目录")
+            validate_existing_remote_storage_path(cleaned)
+        except Exception as exc:
+            return False, f"拒绝不安全的删除路径 {p!r}：{exc}"
         valid_paths.append(cleaned)
 
     if not valid_paths:
