@@ -1268,8 +1268,6 @@ class MainWindow(QMainWindow):
 
         self._picking = True
         self.source_card.btn_pick.setEnabled(False)
-        self.hide()
-        QApplication.processEvents()
 
         paths: list[str] = []
         try:
@@ -1278,9 +1276,6 @@ class MainWindow(QMainWindow):
             self.append_log(f"打开选择器失败：{e}")
             QMessageBox.warning(self, "无法打开选择器", str(e))
         finally:
-            self.show()
-            self.raise_()
-            self.activateWindow()
             self._picking = False
             self.source_card.btn_pick.setEnabled(True)
 

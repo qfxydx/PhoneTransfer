@@ -223,54 +223,50 @@ def resolve_app_icon() -> QIcon:
 
 
 def picker_helper_path() -> Path | None:
+    """Return the bundled native chooser without compiling on the GUI thread."""
     binary = PROJECT_ROOT / "bin" / "pick_items"
-    source = PROJECT_ROOT / "pick_items.swift"
-    if not source.is_file():
-        return binary if binary.is_file() else None
-    try:
-        binary.parent.mkdir(parents=True, exist_ok=True)
-        needs_build = (
-            not binary.is_file()
-            or binary.stat().st_mtime < source.stat().st_mtime
-        )
-        if needs_build:
-            r = subprocess.run(
-                ["swiftc", "-O", "-o", str(binary), str(source)],
-                capture_output=True,
-                text=True,
-                timeout=120,
-            )
-            if r.returncode != 0:
-                return None
-        return binary if binary.is_file() else None
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        return binary if binary.is_file() else None
+    return binary if binary.is_file() and os.access(binary, os.X_OK) else None
 
 
 def _run_picker_process(executable: str, args: list[str]) -> tuple[int, str, str]:
+    """Run the native picker with Qt event dispatch; handle very fast exits."""
     process = QProcess()
+    loop = QEventLoop()
+    # Connect before starting: an immediate exit must not miss finished().
+    process.finished.connect(loop.quit)
+    process.errorOccurred.connect(lambda _error: loop.quit())
     process.start(executable, args)
     if not process.waitForStarted(5000):
-        return 1, "", "picker failed to start"
+        error = process.errorString() or "文件选择器无法启动"
+        return 1, "", error
 
-    loop = QEventLoop()
-    process.finished.connect(loop.quit)
-    loop.exec()
+    # On fast exits, waitForStarted may return after finished was emitted.
+    if process.state() != QProcess.ProcessState.NotRunning:
+        loop.exec()
 
     stdout = bytes(process.readAllStandardOutput()).decode("utf-8", errors="replace")
     stderr = bytes(process.readAllStandardError()).decode("utf-8", errors="replace")
-    return process.exitCode(), stdout, stderr
+    code = process.exitCode()
+    if process.exitStatus() != QProcess.ExitStatus.NormalExit:
+        code = 1
+    return code, stdout, stderr
 
 
 def pick_files_and_folders(title: str = "选择要传输的内容") -> list[str]:
     if sys.platform == "darwin":
         helper = picker_helper_path()
-        if helper is not None:
-            code, stdout, _stderr = _run_picker_process(str(helper), [title])
-            if code == 0:
-                paths = [ln.strip() for ln in stdout.splitlines() if ln.strip()]
-                if paths:
-                    return paths
+        if helper is None:
+            raise RuntimeError(
+                "Mac 文件选择器组件缺失或无法执行。"
+                "请重新安装应用，或在源码目录运行 "
+                "swiftc -O -o bin/pick_items pick_items.swift；"
+                "也可以直接将文件拖入 PhoneTransfer。"
+            )
+        code, stdout, stderr = _run_picker_process(str(helper), [title])
+        if code != 0:
+            raise RuntimeError(f"Mac 文件选择器打开失败：{stderr.strip() or '未知错误'}")
+        # Empty output is a normal Cancel; never launch a second Qt dialog.
+        return [line for line in stdout.splitlines() if line]
 
     dialog = QFileDialog()
     dialog.setWindowTitle(title)
