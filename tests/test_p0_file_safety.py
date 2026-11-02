@@ -67,6 +67,56 @@ class TestPathSafety(unittest.TestCase):
         self.assertIn("mkdir -p", shell.call_args_list[1].args[0])
 
     @patch.object(file_ops, "adb_shell")
+    def test_mkdir_directly_under_shared_storage_root(self, shell):
+        shell.side_effect = [
+            CompletedProcess([], 0, "/storage/emulated/0\\n".replace("\\n", "\n"), ""),
+            CompletedProcess([], 0, "", ""),
+        ]
+        ok, err = file_ops.remote_mkdir("/sdcard/NewFolder")
+        self.assertTrue(ok, err)
+        self.assertEqual(shell.call_count, 2)
+        self.assertIn("mkdir -p", shell.call_args_list[1].args[0])
+
+    @patch.object(file_ops, "adb_shell")
+    def test_rename_existing_name_never_invokes_mv(self, shell):
+        shell.side_effect = [
+            CompletedProcess([], 0, "/storage/emulated/0/Download\n", ""),
+            CompletedProcess([], 0, "/storage/emulated/0/Download\n", ""),
+            CompletedProcess([], 0, "", ""),
+        ]
+        ok, err = file_ops.remote_rename(
+            "/sdcard/Download/old.txt", "/sdcard/Download/existing.txt")
+        self.assertFalse(ok)
+        self.assertIn("已存在", err)
+        self.assertFalse(any("mv " in call.args[0] for call in shell.call_args_list))
+
+    @patch.object(file_ops, "adb_shell")
+    def test_rename_nonexisting_destination_uses_nonclobbering_mv(self, shell):
+        shell.side_effect = [
+            CompletedProcess([], 0, "/storage/emulated/0\n", ""),
+            CompletedProcess([], 0, "/storage/emulated/0\n", ""),
+            CompletedProcess([], 1, "", ""),
+            CompletedProcess([], 0, "", ""),
+        ]
+        ok, err = file_ops.remote_rename("/sdcard/old.txt", "/sdcard/new.txt")
+        self.assertTrue(ok, err)
+        self.assertIn("mv -n", shell.call_args_list[-1].args[0])
+        self.assertIn("test ! -e", shell.call_args_list[-1].args[0])
+
+    @patch.object(file_ops, "adb_shell")
+    def test_delete_storage_root_still_blocked(self, shell):
+        ok, err = file_ops.remote_delete(["/sdcard"])
+        self.assertFalse(ok)
+        shell.assert_not_called()
+
+    @patch.object(file_ops, "remote_is_dir", return_value=True)
+    def test_upload_file_cannot_replace_existing_folder(self, _is_dir):
+        with self.assertRaises(RuntimeError):
+            file_ops.resolve_remote_path(
+                "/sdcard/Download", "clash", False,
+                lambda _: None, sync_mode="overwrite")
+
+    @patch.object(file_ops, "adb_shell")
     def test_rename_unsafe_parent(self, shell):
         shell.side_effect = [
             CompletedProcess([], 0, "/storage/emulated/0/Download\n", ""),

@@ -135,7 +135,7 @@ def remote_mkdir(remote_dir: str) -> tuple[bool, str]:
     """在手机端内部存储中安全创建新文件夹。"""
     try:
         target = validate_remote_storage_path(remote_dir)
-        validate_existing_remote_storage_path(posixpath.dirname(target))
+        validate_existing_remote_storage_path(posixpath.dirname(target), allow_storage_root=True)
     except Exception as exc:
         return False, f"拒绝不安全的新建目录路径：{exc}"
 
@@ -155,8 +155,8 @@ def remote_rename(old_path: str, new_path: str) -> tuple[bool, str]:
     try:
         old_p = validate_remote_storage_path(old_path)
         new_p = validate_remote_storage_path(new_path)
-        validate_existing_remote_storage_path(posixpath.dirname(old_p))
-        validate_existing_remote_storage_path(posixpath.dirname(new_p))
+        validate_existing_remote_storage_path(posixpath.dirname(old_p), allow_storage_root=True)
+        validate_existing_remote_storage_path(posixpath.dirname(new_p), allow_storage_root=True)
     except Exception as exc:
         return False, f"拒绝不安全的重命名路径：{exc}"
     if old_p == new_p:
@@ -166,9 +166,27 @@ def remote_rename(old_path: str, new_path: str) -> tuple[bool, str]:
     if not new_name or any(c in new_name for c in ("\0", ":", "*", "?", '"', "<", ">", "|", "\\", "/")):
         return False, "新名称包含非法字符"
 
-    res = adb_shell(f"mv {shell_quote(old_p)} {shell_quote(new_p)}", timeout=15)
+    # Never silently replace a different file or move the source into a
+    # pre-existing directory with the requested target name.
+    exists = adb_shell(
+        f"test -e {shell_quote(new_p)} || test -L {shell_quote(new_p)}",
+        timeout=10,
+    )
+    if exists.returncode == 0:
+        return False, "目标名称已存在，请使用其他名称"
+    if exists.returncode != 1:
+        return False, "无法确认目标名称是否可用，已取消重命名"
+
+    # -n prevents clobbering if the destination appears after the check.
+    # Verify source disappeared: some mv implementations return success for
+    # a skipped operation with -n.
+    move_cmd = (
+        f"mv -n {shell_quote(old_p)} {shell_quote(new_p)} "
+        f"&& test ! -e {shell_quote(old_p)} && test ! -L {shell_quote(old_p)}"
+    )
+    res = adb_shell(move_cmd, timeout=15)
     if res.returncode != 0:
-        err = (res.stderr or res.stdout or "重命名失败").strip()
+        err = (res.stderr or res.stdout or "移动未完成，目标可能已被占用").strip()
         return False, err
 
     ext_old = posixpath.splitext(old_p)[1].lower()
@@ -209,13 +227,21 @@ def validate_remote_storage_path(path: str) -> str:
     raise ValueError("仅允许操作手机共享存储目录中的项目")
 
 
-def validate_existing_remote_storage_path(path: str) -> None:
-    """Block symlink escapes before destructive operations (fail closed)."""
+def validate_existing_remote_storage_path(
+    path: str, *, allow_storage_root: bool = False
+) -> None:
+    """Check resolved shared-storage paths without permitting root deletion."""
     result = adb_shell(f"readlink -f {shell_quote(path)}", timeout=10)
     if result.returncode != 0 or len(result.stdout.splitlines()) != 1:
         raise ValueError("无法验证手机端路径真实位置，已拒绝危险操作")
+    resolved = result.stdout.strip()
+    if allow_storage_root and (
+        resolved in _SAFE_STORAGE_ROOTS
+        or _REMOVABLE_STORAGE_ROOT.fullmatch(resolved)
+    ):
+        return
     try:
-        validate_remote_storage_path(result.stdout.strip())
+        validate_remote_storage_path(resolved)
     except ValueError as exc:
         raise ValueError("目标路径解析后超出共享存储安全范围") from exc
 
@@ -439,6 +465,8 @@ def resolve_remote_path(
             raise RuntimeError(f"无法同步，同名路径已被文件占用：{name}")
         return remote
 
+    if remote_is_dir(remote):
+        raise RuntimeError(f"目标路径已被同名文件夹占用：{name}")
     if not remote_exists(remote):
         return remote
 
