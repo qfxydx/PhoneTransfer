@@ -5,6 +5,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/qfxydx/PhoneTransfer/releases/latest"><img src="https://img.shields.io/github/v/release/qfxydx/PhoneTransfer?style=flat-square&color=blue&label=Download%20DMG" alt="Latest Release" /></a>
   <img src="https://img.shields.io/badge/Platform-macOS-black?style=flat-square&logo=apple" alt="Platform" />
   <img src="https://img.shields.io/badge/Python-3.10%2B-blue?style=flat-square&logo=python" alt="Python" />
   <img src="https://img.shields.io/badge/GUI-PySide6%20%2F%20Qt-green?style=flat-square&logo=qt" alt="GUI" />
@@ -68,12 +69,22 @@
 
 ## 🚀 快速上手与运行
 
-### 依赖环境
+### 方式一：直接下载安装包（推荐普通用户）
+
+1. 前往 [Releases 发布页面](https://github.com/qfxydx/PhoneTransfer/releases/latest) 下载最新的 **`PhoneTransfer-v1.0.0-macOS.dmg`**；
+2. 双击打开镜像，将 **`PhoneTransfer.app`** 拖入 **`Applications`** 应用程序文件夹；
+3. 打开即可使用！（若首次打开提示“无法打开未受信任的开发者”，请在 macOS「系统设置 -> 隐私与安全性」中轻按「仍要打开」即可）。
+
+---
+
+### 方式二：开发者源码运行
+
+#### 依赖环境
 - **macOS**：macOS 11 (Big Sur) 及更高版本
 - **Python**：Python 3.10+
 - **ADB**：系统已安装 `adb`（若安装了 Android SDK 或通过 `brew install android-platform-tools`）
 
-### 运行方式
+#### 命令行启动
 
 ```bash
 # 1. 克隆本项目仓库
