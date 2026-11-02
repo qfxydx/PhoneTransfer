@@ -1,11 +1,12 @@
 # PhoneTransfer 📱 ⇄ 💻
 
 <p align="center">
-  <b>针对 macOS 精心打造的 Android 极速传输与协同中枢（零手机端 App 侵入）</b>
+  <b>面向 macOS 的 Android 文件传输与跨端协同工具，无需在手机安装常驻 App</b>
 </p>
 
 <p align="center">
-  <a href="https://github.com/qfxydx/PhoneTransfer/releases/latest"><img src="https://img.shields.io/github/v/release/qfxydx/PhoneTransfer?style=flat-square&color=blue&label=Download%20DMG" alt="Latest Release" /></a>
+  <a href="https://github.com/qfxydx/PhoneTransfer/releases/tag/v1.0.1"><img src="https://img.shields.io/badge/Release-v1.0.1%20(Source)-blue?style=flat-square" alt="Latest Source Release" /></a>
+  <a href="https://github.com/qfxydx/PhoneTransfer/releases/tag/v1.0.0"><img src="https://img.shields.io/badge/DMG-v1.0.0%20(Legacy)-gray?style=flat-square" alt="Legacy DMG Release" /></a>
   <img src="https://img.shields.io/badge/Platform-macOS-black?style=flat-square&logo=apple" alt="Platform" />
   <img src="https://img.shields.io/badge/Python-3.10%2B-blue?style=flat-square&logo=python" alt="Python" />
   <img src="https://img.shields.io/badge/GUI-PySide6%20%2F%20Qt-green?style=flat-square&logo=qt" alt="GUI" />
@@ -16,113 +17,166 @@
 
 ## 💡 为什么需要 PhoneTransfer？
 
-在 macOS 上连接 Android 手机一直是个令人头疼的痛点：
-- 官方 **Android File Transfer (AFT)** 已被 Google 废弃，传输稍大文件经常卡死闪退。
-- 基于 Electron 的开源工具（如 OpenMTP）内存占用动辄几百兆，且脆弱的 MTP 协议不支持并发。
-- 大量互传工具要求在手机上常驻安装一个后台 APK，不仅费电，还极易被国内手机系统杀后台。
+在 macOS 上管理 Android 手机文件常受制于 MTP 协议的并发限制或官方工具停更维护。许多第三方工具则要求在手机端常驻安装后台 APK，容易受系统节电策略影响或增加系统负担。
 
-**PhoneTransfer 彻底改变了这一切**：
-基于原生 **ADB 管道与底层反射技术**，做到 **手机端 0 App 安装、0 常驻后台**，插线即连、拔线即走！同时深度融入 macOS 人机交互精髓，为你带来真正顺滑的跨端协同体验。
+**PhoneTransfer** 基于成熟的 **Android Debug Bridge (ADB)** 协议实现 macOS 与 Android 之间的双向文件管理，无需在手机端安装常驻应用，提供轻量快捷的跨端协同体验：
+- **无常驻后台**：手机端无需安装驻留 App，即插即用，拔线即走；
+- **跨端辅助集成**：集成本地/远程双向文件管理、空格键快速预览、系统剪贴板速传、无线调试以及屏幕投屏协同；
+- **原生 macOS 质感**：采用符合 macOS 人机交互习惯的界面与快捷键设计。
 
----
-
-## 🌟 核心亮点特性
-
-### 1. ⚡ 原生双向高速传输
-- **带宽跑满**：USB 有线直连稳定 40+ MB/s，大体积 4K 视频、无损音频秒级传输。
-- **智能防冲突策略**：支持「跳过已存在」、「直接覆盖」、「重命名备份」三种灵活冲突解决机制。
-- **空间动态侦测**：自动获取手机实际可用存储，带轻量防闪烁动画，传输前杜绝空间溢出风险。
-
-### 2. 👁️ Mac 级 QuickLook 空格键即时预览
-- 无论是电脑本地文件，还是**手机内部存储**中的照片、音视频、PDF 或文档，只要**轻按空格键（Space）**即可直接呼出 macOS 原生 QuickLook 大图/高清视频播放预览！
-
-### 3. 📋 跨端系统剪贴板秒传 (`⌘⇧V`)
-- 攻克 Android 10～16 严格的后台剪贴板安全沙箱。
-- 在 Mac 上按下 `⌘⇧V`，输入或粘贴任意内容，按 `⌘↵` 即可在 **30ms 内直推至手机系统剪贴板**。
-- 手机端无需打开任何应用，长按输入框或在输入法（Gboard、微信键盘、搜狗等）浮条上**直接点击粘贴**！
-
-### 4. 🖥️ 一键手机投屏与反向协同 (`⌘⇧M`)
-- 顶栏一键直连 `scrcpy` 超低延迟投屏，自动共享当前 ADB 实例环境，杜绝版本冲突服务重置。
-- 在 Mac 屏幕上直接通过鼠标拖拽点击、Mac 键盘直接打字反向操作手机，传完文件秒开验证。
-
-### 5. ≋ 业界首创「插线转无线」免配对
-- **插线转无线**：插上数据线点击一次，系统自动配置并建立 Wi-Fi 调试通道，随后**拔掉数据线即可随时无线漫游传输**！
-- 亦全面支持 Android 11+ 六位配对码无线连接与手动 IP 直连。
-
-### 6. 📂 智能分类筛选与 APK 极速安装
-- 一键分类切换：照片、视频、音乐、文档、APK 安装包、压缩包。
-- 拖拽任意 `.apk` 文件至手机端，自动携带 `-r -d` 参数实现免确认覆盖与降级安装。
+> *注：虽然手机端无需安装常驻 APK，但在执行剪贴板速传时，本工具会通过 ADB 临时向手机 `/data/local/tmp/` 目录推送开源轻量辅助组件 `pt_clip.jar` 并通过系统 Shell 权限反射执行，执行完毕即退出。*
 
 ---
 
-## ⌨️ 快捷键指南
+## 🌟 核心功能特点
 
-| 快捷键 | 功能描述 |
+### 1. ⚡ 安全双向文件传输
+- **传输安全保护**：单文件上传与下载均采用同级临时文件过渡，并在提交前进行端到端 **SHA-256 校验**；只有哈希验证一致后才执行原子替换，传输取消或异常时自动清理临时文件，保护原文件不被意外损坏。
+- **文件级恢复机制**：在重复执行文件夹同步或重试时，系统能够基于远端文件哈希与元数据跳过已校验一致的文件，避免重复传输无变更内容（非文件内块级断点续传）。
+- **同名防冲突策略**：支持覆盖同名目标或自动保留两份（增加序号后缀）。
+- **存储空间感知**：传输前自动读取手机实际可用存储空间，协助避免存储溢出。
+
+### 2. 👁️ 快速预览 (QuickLook & 媒体播放)
+- **多类型即时预览**：在文件列表选中项目后轻按 **`Space`（空格键）** 即可呼出预览。
+- **差异化渲染引擎**：
+  - 图片、PDF、文本、代码等文件调用 macOS 系统原生的 Quick Look 进行渲染。
+  - 音频与视频文件调用内建 Qt 多媒体播放器窗口进行播放。
+- **缓存与设备隔离**：手机端文件会按设备序列号拉取到隔离的本地临时缓存中，并校验元数据以防混淆。
+- *提示：大型高清视频的预览可能受下载耗时、局域网带宽及系统解码器支持能力影响。*
+
+### 3. 📋 跨端系统剪贴板速传 (`⌘⇧V`)
+- 借助开源的 `ClipTool` 辅助工具与 ADB Shell 权限，绕过 Android 系统后台限制，将 Mac 端的文字或链接快速写入手机系统剪贴板。
+- 在 Mac 上按下 `⌘⇧V`，输入或粘贴任意中英文字符、换行或 Emoji，按 `⌘↵` 即可推送到手机剪贴板。
+- 手机端无需切换应用，直接在目标输入框长按或通过输入法候选条粘贴即可。
+- *注：受各厂商 ROM 权限沙箱与 Android 版本安全策略差异影响，部分机型可能存在兼容性差异；源码与构建说明见 [`tools/cliptool/`](tools/cliptool/)。*
+
+### 4. 🖥️ 一键屏幕镜像与协同 (`⌘⇧M`)
+- 顶栏一键调用开源项目 `scrcpy` 启动超低延迟投屏，自动复用当前 ADB 实例连接。
+- 支持在 Mac 上直接使用键盘打字与鼠标拖拽操作手机屏幕，方便文件传输后的即时校验。
+- *注：投屏功能需本地已安装 `scrcpy` 命令行工具。*
+
+### 5. ≋ 多种连接方式与无线管理
+- **USB 有线连接**：最稳定、吞吐最高的连接模式，推荐用于大文件批量传输。
+- **Android 11+ 官方无线调试**：通过系统「无线调试」界面的配对码（Pairing Code）与随机配对端口安全连接。
+- **经典 TCP ADB 模式 (5555 端口)**：支持一键开启无线网络模式，免除频繁插拔。
+  - *安全提示：经典 5555 端口模式建议仅在受信任的私有局域网环境中临时使用；`adb disconnect` 仅断开客户端连接，不代表关闭手机端的服务监听。工具内提供了关闭无线调试端口的操作入口，用户亦可在手机开发者选项中随时关闭无线调试。*
+
+### 6. 📂 分类筛选与 APK 管理
+- **快速分类过滤**：提供照片、视频、音乐、文档、APK、压缩包等快速分类过滤。
+- **APK 安装更新**：拖拽本地 `.apk` 文件至手机窗口，工具执行标准更新安装（`-r` 参数覆盖）。为保障设备安全，默认不允许降级安装或安装测试包（`-t`），安装前请确认 APK 来源安全。
+
+---
+
+## ⌨️ 常用快捷键
+
+| 快捷键 | 功能说明 |
 | :--- | :--- |
-| **`Space` (空格键)** | 快速呼出/关闭 QuickLook 原生大图与音视频预览 |
-| **`⌘⇧V` (`Ctrl+Shift+V`)** | 呼出跨端剪贴板速传对话框 |
-| **`⌘⇧M` (`Ctrl+Shift+M`)** | 一键启动手机屏幕镜像与协同控制 (scrcpy) |
-| **`⌘↵` (`Cmd+Return`)** | 跨端速传弹窗内一键直接发送到手机剪贴板 |
+| **`Space` (空格键)** | 快速呼出/关闭文件预览 (QuickLook / 媒体播放) |
+| **`⌘⇧V` (`Ctrl+Shift+V`)** | 呼出跨端文本速传对话框 |
+| **`⌘⇧M` (`Ctrl+Shift+M`)** | 启动手机屏幕投屏控制 (依赖 scrcpy) |
+| **`⌘↵` (`Cmd+Return`)** | 文本速传弹窗内确认发送到手机剪贴板 |
 | **`Esc`** | 清空文件筛选过滤词 / 返回上级目录 |
 
 ---
 
-## 🚀 快速上手与运行
+## 🚀 下载与安装指南
 
-### 方式一：直接下载安装包（推荐普通用户）
+### 1. 最新源码版本（推荐体验最新修复）
 
-1. 前往 [Releases 发布页面](https://github.com/qfxydx/PhoneTransfer/releases/latest) 下载最新的 **`PhoneTransfer-v1.0.0-macOS.dmg`**；
-2. 双击打开镜像，将 **`PhoneTransfer.app`** 拖入 **`Applications`** 应用程序文件夹；
-3. 打开即可使用！（若首次打开提示“无法打开未受信任的开发者”，请在 macOS「系统设置 -> 隐私与安全性」中轻按「仍要打开」即可）。
+- **最新源码发布**：[PhoneTransfer v1.0.1 Release](https://github.com/qfxydx/PhoneTransfer/releases/tag/v1.0.1)
+- 说明：GitHub Release 页面提供了最新的源码压缩包（Source code .zip / .tar.gz）。由于本次 v1.0.1 为安全与稳定性维护版本，**暂未提供新的预编译 DMG 安装包**。建议按照下方「源码运行」步骤启动使用。
+
+### 2. 历史版本 DMG 安装包
+
+- **历史 DMG 下载**：[PhoneTransfer v1.0.0 Release](https://github.com/qfxydx/PhoneTransfer/releases/tag/v1.0.0)
+- **特别声明**：**`v1.0.0 DMG 为早期构建版本，不包含 v1.0.1 的安全加固与稳定性修复。`** 若仅需体验历史构建，下载打开后将 `PhoneTransfer.app` 拖入 Applications 目录即可。
 
 ---
 
-### 方式二：开发者源码运行
+## 💻 源码运行与使用前提
 
-#### 依赖环境
-- **macOS**：macOS 11 (Big Sur) 及更高版本
-- **Python**：Python 3.10+
-- **ADB**：系统已安装 `adb`（若安装了 Android SDK 或通过 `brew install android-platform-tools`）
+### 系统要求与依赖
+- **操作系统**：macOS 11 (Big Sur) 及更高版本
+- **Python 环境**：Python 3.10+
+- **ADB 工具**：系统环境变量中需包含 `adb` 命令。可通过 Homebrew 安装：
+  ```bash
+  brew install android-platform-tools
+  ```
+- **投屏依赖（可选）**：如需使用投屏功能，需安装 `scrcpy`：
+  ```bash
+  brew install scrcpy
+  ```
 
-#### 命令行启动
+### 手机端准备工作
+1. 在 Android 手机上打开「设置 -> 关于手机」，连续点击「版本号」开启「开发者选项」；
+2. 进入「系统与更新 / 更多设置 -> 开发者选项」，开启 **「USB 调试」**；
+3. 使用 USB 数据线连接 Mac，手机屏幕将弹出「允许 USB 调试吗？」提示，请勾选 **「一律允许使用这台计算机进行调试」** 并点击确定。
 
+### 快速启动
 ```bash
-# 1. 克隆本项目仓库
+# 1. 克隆或下载源码解压
 git clone https://github.com/qfxydx/PhoneTransfer.git
 cd PhoneTransfer
 
-# 2. 安装 Python 依赖
+# 2. 安装 Python 依赖包
 pip3 install -r requirements.txt
 
 # 3. 启动应用
 python3 phone_transfer.py
 ```
 
-*或者直接双击根目录下的 `启动PhoneTransfer.command` 脚本。*
+*提示：在 Finder 中也可以直接双击项目根目录下的 `启动PhoneTransfer.command` 脚本快速启动。*
 
 ---
 
-## 🛠️ 底层组件与源码构建
+## 🛠️ 底层组件与开源说明
 
-PhoneTransfer 秉承 100% 纯粹透明的开源精神，所有核心二进制与助手组件源码均完整开源并包含在代码库中：
+PhoneTransfer 秉承透明可信的开源原则，所有辅助代码均开源并包含在代码库中：
 
-- **Android 剪贴板反射组件 (ClipTool)**：
-  - 源码目录：[`tools/cliptool/src/`](tools/cliptool/src/)
-  - 构建脚本：[`tools/cliptool/build.sh`](tools/cliptool/build.sh)（支持调用 javac 与 Android SDK d8 重新编译生成 `pt_clip.jar`）
-  - 架构解析文档：[`tools/cliptool/README.md`](tools/cliptool/README.md)
-- **Mac 原生文件多选器 (pick_items)**：
-  - 源码文件：[`pick_items.swift`](pick_items.swift)
+- **Android 剪贴板辅助组件 (ClipTool)**：
+  - 源码位置：[`tools/cliptool/src/com/phonetransfer/clip/ClipTool.java`](tools/cliptool/src/com/phonetransfer/clip/ClipTool.java)
+  - 构建脚本：[`tools/cliptool/build.sh`](tools/cliptool/build.sh)（支持调用 javac 与 Android SDK d8 重新编译）
+  - 架构文档：[`tools/cliptool/README.md`](tools/cliptool/README.md)
+- **macOS 文件选择辅助器**：
+  - 源码位置：[`pick_items.swift`](pick_items.swift)
 
 ---
 
-## ☕ 请作者喝杯咖啡 (Buy Me a Coffee)
+## 🛡️ 安全与兼容性说明
 
-PhoneTransfer 是一款由个人在业余时间独立精心打磨的开源项目。如果它在日常工作中为你省下了宝贵的时间或带来了愉悦的体验，欢迎：
+> **PhoneTransfer 是个人独立开发并维护的免费开源项目。**
+>
+> 开发过程中已尽可能通过代码审查、自动化测试和 Android 模拟器验证功能的安全性与稳定性。
+>
+> 由于 Android 系统版本、厂商 ROM、ADB 环境及设备配置存在差异，项目无法保证在全部设备和场景下均无故障。
+>
+> 建议首次使用时以非重要文件验证传输结果，重要数据提前备份。执行删除、覆盖、重命名、APK 安装等操作前，请确认目标设备及操作内容。
+>
+> 如遇兼容性问题、异常行为或潜在安全风险，欢迎提交 GitHub Issue，作者将在实际维护能力范围内持续修复和改进。
+
+- **设备与定制 ROM 差异**：不同厂商（如小米、三星、OPPO、vivo 等）的定制系统对后台权限、文件访问和媒体广播的响应行为存在差别，项目未对市场上所有机型开展全量适配测试。
+- **数据安全防护**：虽然文件传输增加了临时文件和 SHA-256 完整性校验，但在执行批量删除或目标覆盖等破坏性操作前，请务必确认操作范围。
+- **社区协作**：欢迎提交 Pull Request 完善对更多设备与场景的适配支持。
+
+---
+
+## 📮 问题反馈与交流
+
+如果在使用过程中遇到异常错误或兼容性问题，欢迎前往 GitHub Issues 提交反馈：
+- **Issue 提交入口**：[GitHub Issues](https://github.com/qfxydx/PhoneTransfer/issues)
+- 提交时请使用预设的 **[Bug 反馈模板]**，协助附上操作系统版本、手机型号、定制系统版本及相关错误日志。
+- *请注意：提交日志时切勿包含个人文件内容、设备序列号、私有 IP 或凭证等敏感信息。*
+
+---
+
+## ☕ 赞助支持 (Buy Me a Coffee)
+
+PhoneTransfer 由个人在业余时间独立开发并维护。如果它在日常工作中为你提供了便利，欢迎：
 - 在应用左上角点击 **`☕`** 请作者喝杯咖啡 🥐
-- 在 GitHub 右上角给本项目点一个 **Star ⭐**（这是莫大的精神支持！）
+- 在 GitHub 右上角给本项目点一个 **Star ⭐** 支持持续改进！
 
 ---
 
 ## 📄 开源许可证
 
-本项目基于 [MIT License](LICENSE) 开源协议发布，欢迎 Fork、提交 PR 或 Issue。
+本项目采用 [MIT License](LICENSE) 协议开源。
