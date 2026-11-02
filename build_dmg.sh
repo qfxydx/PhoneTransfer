@@ -15,7 +15,7 @@ cp -R dist/PhoneTransfer.app dist/dmg_root/
 ln -s /Applications dist/dmg_root/Applications
 
 # 3. Create compressed DMG using native hdiutil
-DMG_NAME="PhoneTransfer-v1.0.0-macOS.dmg"
+DMG_NAME="PhoneTransfer-v1.0.1-macOS.dmg"
 hdiutil create -volname "PhoneTransfer" \
   -srcfolder dist/dmg_root \
   -ov -format UDZO \

@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/qfxydx/PhoneTransfer/releases/tag/v1.0.1"><img src="https://img.shields.io/badge/Release-v1.0.1%20(Source)-blue?style=flat-square" alt="Latest Source Release" /></a>
+  <a href="https://github.com/qfxydx/PhoneTransfer/releases/tag/v1.0.1"><img src="https://img.shields.io/badge/DMG-v1.0.1%20(Latest)-blue?style=flat-square&logo=apple" alt="Download DMG" /></a>
   <a href="https://github.com/qfxydx/PhoneTransfer/releases/tag/v1.0.0"><img src="https://img.shields.io/badge/DMG-v1.0.0%20(Legacy)-gray?style=flat-square" alt="Legacy DMG Release" /></a>
   <img src="https://img.shields.io/badge/Platform-macOS-black?style=flat-square&logo=apple" alt="Platform" />
   <img src="https://img.shields.io/badge/Python-3.10%2B-blue?style=flat-square&logo=python" alt="Python" />
@@ -81,15 +81,19 @@
 
 ## 🚀 下载与安装指南
 
-### 1. 最新源码版本（推荐体验最新修复）
+### 1. 最新稳定版 DMG 安装包（推荐普通用户）
 
-- **最新源码发布**：[PhoneTransfer v1.0.1 Release](https://github.com/qfxydx/PhoneTransfer/releases/tag/v1.0.1)
-- 说明：GitHub Release 页面提供了最新的源码压缩包（Source code .zip / .tar.gz）。由于本次 v1.0.1 为安全与稳定性维护版本，**暂未提供新的预编译 DMG 安装包**。建议按照下方「源码运行」步骤启动使用。
+- **最新安装包直接下载**：**[`PhoneTransfer-v1.0.1-macOS.dmg`](https://github.com/qfxydx/PhoneTransfer/releases/download/v1.0.1/PhoneTransfer-v1.0.1-macOS.dmg)**（~54 MB）
+- **发布详情页面**：[PhoneTransfer v1.0.1 Release](https://github.com/qfxydx/PhoneTransfer/releases/tag/v1.0.1)
+- **安装步骤**：
+  1. 下载 DMG 镜像文件后双击打开；
+  2. 将 **`PhoneTransfer.app`** 拖拽复制到右侧的 **`Applications`** 应用程序文件夹；
+  3. 双击打开即可使用！（若系统提示“无法打开未受信任的开发者”，请在 macOS「系统设置 -> 隐私与安全性」中轻按「仍要打开」即可）。
 
-### 2. 历史版本 DMG 安装包
+### 2. 开发者源码运行与历史版本
 
-- **历史 DMG 下载**：[PhoneTransfer v1.0.0 Release](https://github.com/qfxydx/PhoneTransfer/releases/tag/v1.0.0)
-- **特别声明**：**`v1.0.0 DMG 为早期构建版本，不包含 v1.0.1 的安全加固与稳定性修复。`** 若仅需体验历史构建，下载打开后将 `PhoneTransfer.app` 拖入 Applications 目录即可。
+- **源码运行**：支持直接使用 Python 源码运行体验最新更新（详见下方「源码运行与使用前提」）。
+- **历史版本归档**：历史版本可前往 [PhoneTransfer v1.0.0 Release](https://github.com/qfxydx/PhoneTransfer/releases/tag/v1.0.0) 查看（注意早期构建不包含 v1.0.1 的安全与稳定性加固）。
 
 ---
 
