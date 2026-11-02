@@ -15,9 +15,12 @@ from PySide6.QtWidgets import QFileDialog, QWidget
 
 from phonetransfer.constants import FILE_BADGE_COLORS
 
-# 项目根目录（兼容从 phonetransfer 包内调用和单文件调用）
-_HERE = Path(__file__).resolve().parent
-PROJECT_ROOT = _HERE.parent if (_HERE.parent / "pick_items.swift").is_file() else _HERE
+# 项目根目录（兼容打包冻结环境与源码开发环境）
+if getattr(sys, "frozen", False):
+    PROJECT_ROOT = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+else:
+    _HERE = Path(__file__).resolve().parent
+    PROJECT_ROOT = _HERE.parent if (_HERE.parent / "pick_items.swift").is_file() else _HERE
 
 
 def card_shadow(widget: QWidget) -> None:

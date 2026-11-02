@@ -102,6 +102,19 @@ python3 phone_transfer.py
 
 ---
 
+## 🛠️ 底层组件与源码构建
+
+PhoneTransfer 秉承 100% 纯粹透明的开源精神，所有核心二进制与助手组件源码均完整开源并包含在代码库中：
+
+- **Android 剪贴板反射组件 (ClipTool)**：
+  - 源码目录：[`tools/cliptool/src/`](tools/cliptool/src/)
+  - 构建脚本：[`tools/cliptool/build.sh`](tools/cliptool/build.sh)（支持调用 javac 与 Android SDK d8 重新编译生成 `pt_clip.jar`）
+  - 架构解析文档：[`tools/cliptool/README.md`](tools/cliptool/README.md)
+- **Mac 原生文件多选器 (pick_items)**：
+  - 源码文件：[`pick_items.swift`](pick_items.swift)
+
+---
+
 ## ☕ 请作者喝杯咖啡 (Buy Me a Coffee)
 
 PhoneTransfer 是一款由个人在业余时间独立精心打磨的开源项目。如果它在日常工作中为你省下了宝贵的时间或带来了愉悦的体验，欢迎：
