@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import hashlib
 import os
 from pathlib import Path
 import re
@@ -18,21 +19,46 @@ CLIP_JAR_LOCAL = ASSETS_DIR / "pt_clip.jar"
 REMOTE_CLIP_JAR = "/data/local/tmp/pt_clip.jar"
 CLIP_CLASS = "com.phonetransfer.clip.ClipTool"
 
+# 本地 JAR 哈希缓存: ((st_mtime_ns, st_size), md5_hexdigest)
+_LOCAL_JAR_CACHE: tuple[tuple[int, int], str] = ((0, 0), "")
+
+
+def get_local_jar_md5() -> str:
+    """获取本地 pt_clip.jar 的 MD5 哈希（基于 st_mtime_ns + st_size 双重缓存）。"""
+    global _LOCAL_JAR_CACHE
+    if not CLIP_JAR_LOCAL.exists():
+        return ""
+    st = CLIP_JAR_LOCAL.stat()
+    cache_key = (st.st_mtime_ns, st.st_size)
+    if _LOCAL_JAR_CACHE[0] == cache_key and _LOCAL_JAR_CACHE[1]:
+        return _LOCAL_JAR_CACHE[1]
+    h = hashlib.md5(CLIP_JAR_LOCAL.read_bytes()).hexdigest().lower()
+    _LOCAL_JAR_CACHE = (cache_key, h)
+    return h
+
 
 def ensure_clipboard_helper(serial: str | None = None) -> tuple[bool, str]:
-    """确保手机端 /data/local/tmp/pt_clip.jar 助手已就绪。"""
+    """确保手机端 /data/local/tmp/pt_clip.jar 助手已就绪且哈希一致。"""
     if not CLIP_JAR_LOCAL.exists():
         return False, f"本地缺少剪贴板助手组件：{CLIP_JAR_LOCAL}"
 
+    local_hash = get_local_jar_md5()
+
     try:
-        local_size = CLIP_JAR_LOCAL.stat().st_size
+        # 尝试通过 md5sum 严格比对文件哈希
         res = adb_shell(
-            f"[ -f {REMOTE_CLIP_JAR} ] && stat -c %s {REMOTE_CLIP_JAR}",
+            f"[ -f {REMOTE_CLIP_JAR} ] && md5sum {REMOTE_CLIP_JAR}",
             serial=serial,
             timeout=5,
         )
-        if res.returncode == 0 and res.stdout.strip() == str(local_size):
-            return True, ""
+        if res.returncode == 0 and res.stdout:
+            parts = res.stdout.strip().split()
+            # 若哈希一致，直接复用手机端现有 JAR，省去推送
+            if parts and parts[0].lower() == local_hash:
+                return True, ""
+        # 若不支持 md5sum、远程文件不存在或哈希不一致：
+        # 由于 pt_clip.jar 仅约 2.5 KB，直接推流更新成本极低（数十毫秒），
+        # 绝不降级为单纯比对文件大小，坚决杜绝因新旧字节数恰好相同误用旧版本的隐患
     except Exception:
         pass
 
