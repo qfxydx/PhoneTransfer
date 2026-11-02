@@ -77,7 +77,8 @@ class ApkInstallWorker(QThread):
                 self.progress.emit(idx, total, name)
                 self.log.emit(f"[{idx}/{total}] 正在安装应用：{name}…")
 
-                cmd = adb_cmd("install", "-r", "-d", "-t", apk, serial=self._serial)
+                # Normal update only: never silently downgrade or allow test-only APKs.
+                cmd = adb_cmd("install", "-r", apk, serial=self._serial)
                 try:
                     res = subprocess.run(
                         cmd,

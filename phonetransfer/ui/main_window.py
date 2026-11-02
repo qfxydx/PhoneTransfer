@@ -688,19 +688,18 @@ class MainWindow(QMainWindow):
         if remote_size <= 0:
             self._show_toast("空文件暂不支持预览")
             return
-        cache_path = self._quicklook.get_preview_cache_path(remote_path)
-        if cache_path.exists() and cache_path.stat().st_size == remote_size:
-            self._quicklook.toggle(cache_path)
-            return
-
         if self._preview_worker is not None and self._preview_worker.isRunning():
             return
 
+        serial = get_active_serial()
+        cache_path = self._quicklook.get_preview_cache_path(remote_path, serial)
+        if self._quicklook.current_path() == str(cache_path):
+            self._quicklook.close()
+            return
         name = Path(remote_path).name
         self._show_toast(f"正在加载预览：{name}…")
         self.append_log(f"正在读取手机预览文件：{remote_path}…")
 
-        serial = get_active_serial()
         self._preview_worker = RemotePreviewWorker(
             remote_path, remote_size, str(cache_path), serial=serial, parent=self
         )
@@ -710,6 +709,9 @@ class MainWindow(QMainWindow):
 
     def _on_remote_preview_ready(self, local_cache_path: str) -> None:
         self._hide_toast()
+        if self._preview_worker is not None and self._preview_worker._serial != get_active_serial():
+            self.append_log("预览完成时设备已切换，已忽略旧设备文件")
+            return
         self._quicklook.preview(local_cache_path)
 
     def _on_remote_preview_failed(self, error: str) -> None:
@@ -1018,7 +1020,8 @@ class MainWindow(QMainWindow):
         self.refresh_device(manual=False)
 
     def refresh_device(self, *, manual: bool = False) -> None:
-        if self._closing or self._device_worker is None:
+        # Keep the target device pinned for the lifetime of a transfer.
+        if self._busy or self._closing or self._device_worker is None:
             return
         if self._device_probe_busy and not manual:
             return
@@ -1059,6 +1062,11 @@ class MainWindow(QMainWindow):
         if gen != self._device_gen:
             return
         self._device_probe_busy = False
+        if self._busy:
+            # An earlier in-flight probe must not change the active ADB
+            # target while a transfer is using it.
+            self.btn_refresh.setEnabled(True)
+            return
         devices = payload.get("devices") or []
         usb_phones = payload.get("usb_phones") or []
         manual = self._pending_device_manual
@@ -1174,6 +1182,9 @@ class MainWindow(QMainWindow):
         if gen != self._device_gen:
             return
         self._device_probe_busy = False
+        if self._busy:
+            self.btn_refresh.setEnabled(True)
+            return
         manual = self._pending_device_manual
         self.btn_refresh.setEnabled(True)
         if not manual:
@@ -1380,9 +1391,9 @@ class MainWindow(QMainWindow):
         self.btn_go.setEnabled(False)
         self.btn_swap.setEnabled(False)
         self._set_progress_visible(True)
-        self.progress_bar.setValue(0)
-        self.progress_pct.setText("0%")
-        self.progress_count.setText("0 B / —")
+        self.progress_bar.setRange(0, 0)  # Indeterminate until a verified file completes.
+        self.progress_pct.setText("传输中")
+        self.progress_count.setText("0 B 已校验")
         self.progress_file.setText("准备中…")
         self.progress_file.setToolTip("")
         self.progress_eta.setText("")
@@ -1422,23 +1433,25 @@ class MainWindow(QMainWindow):
         total_files: int,
         name: str,
     ) -> None:
-        pct = int(done_bytes / total_bytes * 100) if total_bytes else 0
-        self.progress_bar.setValue(max(0, min(100, pct)))
-        self.progress_pct.setText(f"{pct}%")
+        # All numbers are verified, committed bytes. In-flight file progress
+        # is deliberately indeterminate rather than estimated by a fake speed.
+        if done_files == 0:
+            self.progress_bar.setRange(0, 0)
+            self.progress_pct.setText("传输中")
+        else:
+            self.progress_bar.setRange(0, 100)
+            pct = int(done_bytes / total_bytes * 100) if total_bytes else 0
+            self.progress_bar.setValue(max(0, min(100, pct)))
+            self.progress_pct.setText(f"{pct}%")
         size_text = f"{human_size(done_bytes)} / {human_size(total_bytes)}"
         if total_files > 1:
-            self.progress_count.setText(f"{size_text}（{done_files}/{total_files}）")
+            self.progress_count.setText(f"{size_text}（已验证 {done_files}/{total_files} 个）")
         else:
-            self.progress_count.setText(size_text)
+            self.progress_count.setText(f"{size_text}（已验证 {done_files}/{total_files}）")
         self.progress_file.setText(self._elide_progress_name(name))
         self.progress_file.setToolTip(name)
-        elapsed = time.monotonic() - self._transfer_started_at
-        if done_bytes > 0 and elapsed > 0:
-            rate = done_bytes / elapsed
-            remaining = (total_bytes - done_bytes) / rate if rate > 0 else 0
-            self.progress_eta.setText(f"约 {max(1, int(remaining))} 秒剩余")
-        else:
-            self.progress_eta.setText("正在估算…")
+        self.progress_eta.setText("传输及完整性校验中 · 只统计已校验文件"
+                                  if done_files < total_files else "全部文件已校验")
 
     def stop_transfer(self) -> None:
         if self._transfer_worker is not None:
@@ -1448,6 +1461,7 @@ class MainWindow(QMainWindow):
     def _on_transfer_done(self, ok: bool, message: str) -> None:
         self._busy = False
         self._set_progress_visible(False)
+        self.progress_bar.setRange(0, 100)
         if ok:
             self.progress_bar.setValue(100)
             self._active_source_card().clear_paths()

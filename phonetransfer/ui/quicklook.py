@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import hashlib
 import subprocess
 import sys
 import tempfile
@@ -210,7 +211,12 @@ class QuickLookManager:
         return cache
 
     @classmethod
-    def get_preview_cache_path(cls, remote_path: str) -> Path:
+    def get_preview_cache_path(cls, remote_path: str, serial: str | None = None) -> Path:
+        """Keep caches isolated by ADB device and full remote path."""
         cache_dir = cls.preview_cache_dir()
-        filename = Path(remote_path).name or "preview_file"
-        return cache_dir / filename
+        device_key = hashlib.sha256((serial or "unknown").encode("utf-8")).hexdigest()[:16]
+        path_key = hashlib.sha256(remote_path.encode("utf-8")).hexdigest()[:24]
+        filename = Path(remote_path).name
+        if not filename or filename in (".", ".."):
+            filename = "preview_file"
+        return cache_dir / device_key / path_key / filename
