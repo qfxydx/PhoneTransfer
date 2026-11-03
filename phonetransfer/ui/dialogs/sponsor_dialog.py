@@ -98,7 +98,7 @@ class SponsorDialog(QDialog):
 
         self.qr_label = QLabel()
         self.qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.qr_label.setFixedSize(220, 240)
+        self.qr_label.setFixedSize(220, 220)
         card_l.addWidget(self.qr_label)
 
         self.author_label = QLabel("扫码支持作者：Berethor (**旭)")
@@ -143,7 +143,7 @@ class SponsorDialog(QDialog):
         if WECHAT_QR_PATH.exists():
             pm = QPixmap(str(WECHAT_QR_PATH))
             scaled = pm.scaled(
-                220, 240, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
+                220, 220, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
             )
             self.qr_label.setPixmap(scaled)
         else:
@@ -154,7 +154,7 @@ class SponsorDialog(QDialog):
         if ALIPAY_QR_PATH.exists():
             pm = QPixmap(str(ALIPAY_QR_PATH))
             scaled = pm.scaled(
-                220, 240, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
+                220, 220, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
             )
             self.qr_label.setPixmap(scaled)
         else:

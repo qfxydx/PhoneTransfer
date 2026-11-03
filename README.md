@@ -13,6 +13,10 @@
   <img src="https://img.shields.io/badge/License-MIT-orange?style=flat-square" alt="License" />
 </p>
 
+<p align="center">
+  <img src="docs/screenshots/01_main_mac_to_phone.png" alt="PhoneTransfer 主界面 - 电脑向手机极速传输" width="820" />
+</p>
+
 ---
 
 ## 💡 为什么需要 PhoneTransfer？
@@ -25,6 +29,21 @@
 - **原生 macOS 质感**：采用符合 macOS 人机交互习惯的界面与快捷键设计。
 
 > *注：虽然手机端无需安装常驻 APK，但在执行剪贴板速传时，本工具会通过 ADB 临时向手机 `/data/local/tmp/` 目录推送开源轻量辅助组件 `pt_clip.jar` 并通过系统 Shell 权限反射执行，执行完毕即退出。*
+
+---
+
+## 📸 界面预览与功能展示
+
+| 电脑向手机传输 (Mac → Phone) | 手机文件管理与即时预览 (Phone → Mac) |
+| :---: | :---: |
+| <img src="docs/screenshots/01_main_mac_to_phone.png" width="420" alt="电脑向手机传输" /> | <img src="docs/screenshots/02_main_phone_to_mac.png" width="420" alt="手机文件浏览与管理" /> |
+| **跨端文本与剪贴板速传 (`⌘⇧V`)** | **无线连接与管理 (Wi-Fi 调试)** |
+| <img src="docs/screenshots/03_quick_text_clipboard.png" width="420" alt="跨端文本速传" /> | <img src="docs/screenshots/04_wifi_connection.png" width="420" alt="添加无线设备" /> |
+
+<p align="center">
+  <img src="docs/screenshots/05_sponsor_dialog.png" width="380" alt="请作者喝杯咖啡" /><br/>
+  <sub>☕ 支持作者持续打磨开源作品</sub>
+</p>
 
 ---
 
