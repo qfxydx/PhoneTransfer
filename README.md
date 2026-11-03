@@ -40,11 +40,6 @@
 | **跨端文本与剪贴板速传 (`⌘⇧V`)** | **无线连接与管理 (Wi-Fi 调试)** |
 | <img src="docs/screenshots/03_quick_text_clipboard.png" width="420" alt="跨端文本速传" /> | <img src="docs/screenshots/04_wifi_connection.png" width="420" alt="添加无线设备" /> |
 
-<p align="center">
-  <img src="docs/screenshots/05_sponsor_dialog.png" width="380" alt="请作者喝杯咖啡" /><br/>
-  <sub>☕ 支持作者持续打磨开源作品</sub>
-</p>
-
 ---
 
 ## 🌟 核心功能特点
