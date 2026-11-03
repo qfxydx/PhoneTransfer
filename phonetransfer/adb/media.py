@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+from phonetransfer.i18n import tr
+
 import subprocess
 from pathlib import Path
 from typing import Callable
@@ -96,15 +98,15 @@ def refresh_phone_media(
     if not ordered:
         return 0
     if log:
-        log(f"刷新媒体库（{len(ordered)} 个）…")
+        log(tr('刷新媒体库（{p0} 个）…', p0=len(ordered)))
     scanned = 0
     for path in ordered:
         if scan_remote_media_file(path):
             scanned += 1
     if log:
         if scanned:
-            log("已刷新媒体，相册/图库中应可立即看到")
+            log(tr('已刷新媒体，相册/图库中应可立即看到'))
         else:
-            log("媒体库刷新未确认成功，可在手机上下拉刷新相册后再看")
+            log(tr('媒体库刷新未确认成功，可在手机上下拉刷新相册后再看'))
     return scanned
 

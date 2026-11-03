@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+from phonetransfer.i18n import tr
+
 import os
 import re
 import shlex
@@ -128,7 +130,7 @@ def device_display_name(device: dict) -> str:
     model = format_model_name(str(device.get("model") or "Android"))
     serial = str(device.get("serial") or "")
     if is_emulator_serial(serial):
-        return f"{model}（模拟器）"
+        return tr('{p0}（模拟器）', p0=model)
     if is_wifi_serial(serial):
         return f"🛜 {model}"
     return f"🔌 {model}"
@@ -186,34 +188,33 @@ def detect_usb_android_phones() -> list[dict[str, str]]:
 def explain_adb_device_state(state: str) -> str:
     state = (state or "").strip().lower()
     if state == "unauthorized":
-        return "请在手机上点「允许 USB 调试」"
+        return tr('请在手机上点「允许 USB 调试」')
     if state == "offline":
-        return "设备离线，请重新插拔数据线或重启 USB 调试"
+        return tr('设备离线，请重新插拔数据线或重启 USB 调试')
     if state == "recovery":
-        return "手机处于 Recovery 模式，请退出后重试"
+        return tr('手机处于 Recovery 模式，请退出后重试')
     if state == "sideload":
-        return "手机处于 Sideload 模式，请退出后重试"
+        return tr('手机处于 Sideload 模式，请退出后重试')
     if state:
-        return f"设备状态异常：{state}"
-    return "设备状态异常"
+        return tr('设备状态异常：{p0}', p0=state)
+    return tr('设备状态异常')
 
 
 def explain_adb_error(text: str, local: Path, remote: str) -> str | None:
     lower = text.lower()
     if "no such file or directory" in lower:
         if "cannot stat" in lower:
-            return f"本地文件无法读取（请确认已从 iCloud 下载到本机）：{local.name}"
+            return tr('本地文件无法读取（请确认已从 iCloud 下载到本机）：{p0}', p0=local.name)
         if not remote.startswith("/"):
-            return f"手机目标路径格式不正确：{remote}（请使用如 /sdcard/Download）"
-        return f"手机目标路径不存在或无法访问：{remote}"
+            return tr('手机目标路径格式不正确：{p0}（请使用如 /sdcard/Download）', p0=remote)
+        return tr('手机目标路径不存在或无法访问：{p0}', p0=remote)
     if "no space left" in lower or "not enough space" in lower:
-        return f"手机存储空间不足，无法传输：{local.name}"
+        return tr('手机存储空间不足，无法传输：{p0}', p0=local.name)
     if "permission denied" in lower:
-        return f"没有权限写入手机目标路径：{local.name}"
+        return tr('没有权限写入手机目标路径：{p0}', p0=local.name)
     if "symlink failed" in lower or "remote symlink" in lower:
         return (
-            f"文件夹包含符号链接，无法直接传输：{local.name}"
-            "（将自动改为传输实际文件内容）"
+            tr('文件夹包含符号链接，无法直接传输：{p0}（将自动改为传输实际文件内容）', p0=local.name)
         )
     return None
 
@@ -226,6 +227,6 @@ def format_adb_failure(lines: list[str], local: Path, remote: str) -> str:
     for line in reversed(lines):
         line = line.strip()
         if line and "pushed" not in line.lower():
-            return f"传输失败：{local.name}（{line}）"
-    return f"传输失败：{local.name}"
+            return tr('传输失败：{p0}（{p1}）', p0=local.name, p1=line)
+    return tr('传输失败：{p0}', p0=local.name)
 

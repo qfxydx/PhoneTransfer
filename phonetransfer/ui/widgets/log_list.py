@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from phonetransfer.i18n import tr
+from phonetransfer.log_kinds import catalog_log_kind
+
 from dataclasses import dataclass
 import re
 
@@ -24,8 +27,8 @@ class ParsedLogEntry:
 
 
 LOG_KIND_META: dict[str, tuple[str, str]] = {
-    "device": ("#5aa3ec", "机"),
-    "transfer": ("#9a7cf0", "传"),
+    "device": ("#5aa3ec", "▣"),
+    "transfer": ("#9a7cf0", "↔"),
     "success": ("#34c759", "✓"),
     "warning": ("#f5a623", "!"),
     "error": ("#e8685a", "×"),
@@ -34,130 +37,51 @@ LOG_KIND_META: dict[str, tuple[str, str]] = {
 }
 
 
+_ADB_SUMMARY = re.compile(
+    r"(?:[^\n]+: )?(?P<count>\d+) files? (?P<verb>pushed|pulled)"
+    r"(?:, (?:\d+ skipped\.?(?: [^\n]*)?|[\d.]+ [KMGT]?B/s(?: \([^\n]*\))?))?"
+)
+
+
 def _parse_adb_push_summary(line: str) -> ParsedLogEntry:
-    count_match = re.search(r"(\d+) files? pushed", line)
-    speed_match = re.search(r"([\d.]+ [KMGT]?B/s)", line)
-    count = count_match.group(1) if count_match else None
-    speed = speed_match.group(1) if speed_match else ""
-    if count:
-        title = f"传输完成 · {count} 个文件"
-        detail = f"速度 {speed}" if speed else ""
-        return ParsedLogEntry("success", title, detail)
-    return ParsedLogEntry("success", "传输完成", line)
+    """Compatibility helper re-exported by phone_transfer.py; keep raw detail."""
+    count = re.search(r"(\d+) files? pushed", line)
+    title = tr('传输完成 · {p0} 个文件', p0=count.group(1)) if count else tr('传输完成')
+    return ParsedLogEntry("success", title, line)
 
 
-def parse_log_line(text: str) -> ParsedLogEntry | None:
+def parse_log_line(text: str, *, kind: str | None = None) -> ParsedLogEntry | None:
     t = text.strip()
     if not t:
         return None
-
-    if re.match(r"已传输 \d+/\d+", t):
-        return None
-
-    if t.startswith("引擎就绪"):
-        detail = t.split("·", 1)[1].strip() if "·" in t else ""
-        return ParsedLogEntry("info", "引擎就绪", detail)
-
-    if "正在检测设备" in t:
-        return ParsedLogEntry("device", "正在检测设备")
-
-    if t.startswith("已连接"):
-        return ParsedLogEntry("success", "设备已连接", t[3:].strip())
-
-    if "未检测到设备" in t:
-        return ParsedLogEntry("warning", "未检测到设备")
-
-    if "USB 调试" in t or "允许 USB 调试" in t:
-        return ParsedLogEntry("warning", t)
-
-    if "设备状态异常" in t:
-        detail = t.split("：", 1)[1].strip() if "：" in t else ""
-        return ParsedLogEntry("error", "设备状态异常", detail)
-
-    if "设备检测失败" in t:
-        return ParsedLogEntry("error", "设备检测失败")
-
-    if t.startswith("已添加"):
-        return ParsedLogEntry("info", t)
-
-    if t.startswith("打开选择器失败"):
-        return ParsedLogEntry("error", t)
-
-    transfer_match = re.match(r"开始传输 (.+)", t)
-    if transfer_match:
-        return ParsedLogEntry("transfer", "开始传输", transfer_match.group(1).strip())
-
-    item_match = re.match(r"\[(\d+)/(\d+)\] (.+)", t)
-    if item_match:
-        return ParsedLogEntry(
-            "progress",
-            f"传输第 {item_match.group(1)}/{item_match.group(2)} 项",
-            item_match.group(3),
-        )
-
-    if t.startswith("同步 ") and "个文件" in t:
-        return ParsedLogEntry("progress", t)
-
-    if "批量解析完成" in t:
-        return ParsedLogEntry("progress", t)
-
-    if t.startswith("正在生成传输清单"):
-        return ParsedLogEntry("progress", "正在生成传输清单")
-
-    if "整包传输" in t:
-        return ParsedLogEntry("progress", t)
-
-    if "files pushed" in t or "file pushed" in t:
-        return _parse_adb_push_summary(t)
-
-    if "files pulled" in t or "file pulled" in t:
-        count_match = re.search(r"(\d+) files? pulled", t)
-        speed_match = re.search(r"([\d.]+ [KMGT]?B/s)", t)
-        count = count_match.group(1) if count_match else None
-        speed = speed_match.group(1) if speed_match else ""
-        if count:
-            return ParsedLogEntry(
-                "success",
-                f"拉取完成 · {count} 个文件",
-                f"速度 {speed}" if speed else "",
-            )
-        return ParsedLogEntry("success", "拉取完成", t)
-
-    if "已切换方向" in t:
-        return ParsedLogEntry("info", t)
-
-    if t.startswith("耗时 "):
-        return ParsedLogEntry("success", t)
-
-    if t.startswith("已发送"):
-        return ParsedLogEntry("success", t)
-
-    if "传输已取消" in t or "正在停止" in t:
-        return ParsedLogEntry("warning", t)
-
-    if "失败" in t or "超时" in t or t.startswith("无法"):
-        return ParsedLogEntry("error", t)
-
-    if "同名文件处理" in t:
-        return ParsedLogEntry("info", t)
-
-    if (
-        t.startswith("覆盖同名")
-        or t.startswith("重命名为")
-        or t.startswith("同步到已有")
-        or "检测到符号链接" in t
-        or ("其中 " in t and "需复制" in t)
-        or "改为逐文件传输" in t
-    ):
-        return ParsedLogEntry("info", t)
-
-    if t.startswith("-rw") or t.startswith("total ") or "传输完成（校验" in t:
-        return None
-
-    if len(t) > 96:
-        return ParsedLogEntry("info", "传输日志", t[:96] + "…")
-
-    return ParsedLogEntry("info", t)
+    if kind is not None:
+        if kind not in LOG_KIND_META:
+            raise ValueError(f"Unknown log kind: {kind}")
+        return ParsedLogEntry(kind, text)
+    # Legacy Signal(str) emitters are classified by stable catalog source IDs.
+    # Resolve these before raw ADB formats so filenames/stderr cannot override
+    # the outcome of the enclosing application message.
+    catalog_kind = catalog_log_kind(t)
+    if catalog_kind:
+        return ParsedLogEntry(catalog_kind, text)
+    # External ADB protocol prefixes and neutral symbols are language invariant.
+    if t.startswith("adb: error:"):
+        return ParsedLogEntry("error", text)
+    if t.startswith("adb: warning:"):
+        return ParsedLogEntry("warning", text)
+    if t.startswith(("×", "❌")):
+        return ParsedLogEntry("error", text)
+    if t.startswith(("✓", "✅")):
+        return ParsedLogEntry("success", text)
+    if re.match(r"\[\d+/\d+\]", t):
+        return ParsedLogEntry("progress", text)
+    summary = _ADB_SUMMARY.fullmatch(t)
+    if summary:
+        if summary.group("verb") == "pushed":
+            return _parse_adb_push_summary(text)
+        count = summary.group("count")
+        return ParsedLogEntry("success", tr('拉取完成 · {p0} 个文件', p0=count), text)
+    return ParsedLogEntry("info", text)
 
 
 class LogDetailList(QFrame):
@@ -194,9 +118,12 @@ class LogDetailList(QFrame):
         self._ensure_empty()
 
     def sync_lines(self, lines: list[str]) -> None:
+        self.sync_entries([entry for line in lines if (entry := parse_log_line(line)) is not None])
+
+    def sync_entries(self, entries: list[ParsedLogEntry]) -> None:
         self.clear()
-        for line in lines:
-            self.append(line, auto_scroll=False)
+        for entry in entries:
+            self.append_entry(entry, auto_scroll=False)
         if not self._rows:
             self._ensure_empty()
         else:
@@ -207,6 +134,9 @@ class LogDetailList(QFrame):
         entry = parse_log_line(text)
         if entry is None:
             return
+        self.append_entry(entry, auto_scroll=auto_scroll)
+
+    def append_entry(self, entry: ParsedLogEntry, *, auto_scroll: bool = True) -> None:
         self._remove_empty()
         if self._rows:
             self._rows[-1].setProperty("last", False)
@@ -230,7 +160,7 @@ class LogDetailList(QFrame):
     def _ensure_empty(self) -> None:
         if self._rows or self._empty_label is not None:
             return
-        self._empty_label = QLabel("暂无活动记录")
+        self._empty_label = QLabel(tr('暂无活动记录'))
         self._empty_label.setObjectName("logEmpty")
         self._empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.list_layout.addWidget(self._empty_label)
@@ -250,6 +180,7 @@ class LogDetailList(QFrame):
         color, glyph = LOG_KIND_META.get(entry.kind, LOG_KIND_META["info"])
         row = QFrame()
         row.setObjectName("logRow")
+        row.setProperty("kind", entry.kind)
         h = QHBoxLayout(row)
         h.setContentsMargins(10, 8, 10, 8)
         h.setSpacing(10)
@@ -266,11 +197,13 @@ class LogDetailList(QFrame):
         text_col = QVBoxLayout()
         text_col.setSpacing(2)
         title = QLabel(entry.title)
+        title.setTextFormat(Qt.TextFormat.PlainText)
         title.setObjectName("logRowTitle")
         title.setWordWrap(True)
         text_col.addWidget(title)
         if entry.detail:
             detail = QLabel(entry.detail)
+            detail.setTextFormat(Qt.TextFormat.PlainText)
             detail.setObjectName("logRowDetail")
             detail.setWordWrap(True)
             text_col.addWidget(detail)

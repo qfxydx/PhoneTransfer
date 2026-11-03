@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from phonetransfer.i18n import tr
+
 from pathlib import Path
 import hashlib
 import subprocess
@@ -57,7 +59,7 @@ class VideoPreviewDialog(QDialog):
     def __init__(self, file_path: str, parent=None) -> None:
         super().__init__(parent)
         p = Path(file_path)
-        self.setWindowTitle(f"预览 — {p.name}")
+        self.setWindowTitle(tr('预览 — {p0}', p0=p.name))
         self.setWindowFlags(
             Qt.WindowType.Window
             | Qt.WindowType.WindowCloseButtonHint

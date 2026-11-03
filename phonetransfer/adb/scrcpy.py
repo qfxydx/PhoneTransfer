@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+from phonetransfer.i18n import tr
+
 import os
 from pathlib import Path
 import shutil
@@ -49,7 +51,7 @@ def launch_scrcpy(
     """
     scrcpy_bin = find_scrcpy()
     if not scrcpy_bin:
-        return None, "未检测到已安装的 scrcpy"
+        return None, tr('未检测到已安装的 scrcpy')
 
     target_serial = serial or get_active_serial()
     cmd = [scrcpy_bin]
@@ -82,7 +84,7 @@ def launch_scrcpy(
         )
         return proc, ""
     except Exception as e:
-        return None, f"启动 scrcpy 失败：{e}"
+        return None, tr('启动 scrcpy 失败：{p0}', p0=e)
 
 
 def open_terminal_to_install_scrcpy() -> tuple[bool, str]:
@@ -92,7 +94,7 @@ def open_terminal_to_install_scrcpy() -> tuple[bool, str]:
         r = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=5)
         if r.returncode == 0:
             return True, ""
-        return False, (r.stderr or "执行 AppleScript 失败").strip()
+        return False, (r.stderr or tr('执行 AppleScript 失败')).strip()
     except Exception as e:
         return False, str(e)
 

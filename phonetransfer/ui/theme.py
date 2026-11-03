@@ -386,6 +386,22 @@ class AppTheme:
       QToolButton#refreshBtn:hover {{
         background: {t.seg_bg};
       }}
+      QToolButton#languageButton {{
+        background: transparent;
+        border: none;
+        border-radius: 6px;
+        padding: 4px;
+      }}
+      QToolButton#languageButton:hover, QToolButton#languageButton:focus {{
+        background: {t.seg_bg};
+      }}
+      QToolButton#languageButton::menu-indicator {{
+        image: none;
+        width: 0px;
+      }}
+      QMenu#languageMenu::item {{
+        padding: 6px 18px 6px 24px;
+      }}
       QToolButton#swapBtn {{
         background: {t.card};
         border: 1px solid {t.line};

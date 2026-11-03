@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+from phonetransfer.i18n import tr
+
 import ipaddress
 import re
 import subprocess
@@ -45,7 +47,7 @@ class WifiActionWorker(QThread):
         ip = self.params.get("ip", "").strip()
         port = self.params.get("port", 5555)
         target = f"{ip}:{port}"
-        self.progress.emit(f"正在连接 {target}…")
+        self.progress.emit(tr('正在连接 {p0}…', p0=target))
         try:
             proc = subprocess.run(
                 [ADB, "connect", target],
@@ -60,19 +62,19 @@ class WifiActionWorker(QThread):
             ):
                 self.action_finished.emit("connect", True, f"✅ {output}", True)
             else:
-                msg = f"❌ {output}" if output else "❌ 连接失败，请检查 IP 和端口"
+                msg = f"❌ {output}" if output else tr('❌ 连接失败，请检查 IP 和端口')
                 self.action_finished.emit("connect", False, msg, False)
         except subprocess.TimeoutExpired:
-            self.action_finished.emit("connect", False, "❌ 连接超时，目标设备不可达", False)
+            self.action_finished.emit("connect", False, tr('❌ 连接超时，目标设备不可达'), False)
         except Exception as e:
-            self.action_finished.emit("connect", False, f"❌ 错误：{e}", False)
+            self.action_finished.emit("connect", False, tr('❌ 错误：{p0}', p0=e), False)
 
     def _run_pair(self) -> None:
         ip = self.params.get("ip", "").strip()
         port = self.params.get("port", 37000)
         code = self.params.get("code", "").strip()
         target = f"{ip}:{port}"
-        self.progress.emit(f"正在向 {target} 发送配对码…")
+        self.progress.emit(tr('正在向 {p0} 发送配对码…', p0=target))
         try:
             proc = subprocess.run(
                 [ADB, "pair", target],
@@ -83,15 +85,15 @@ class WifiActionWorker(QThread):
             )
             output = (proc.stdout + proc.stderr).strip()
             if "successfully" in output.lower() or "paired" in output.lower():
-                msg = f"✅ 配对成功！设备下次自动轮询或切换到「手动输入」即可连接。\n{output}"
+                msg = tr('✅ 配对成功！设备下次自动轮询或切换到「手动输入」即可连接。\n{p0}', p0=output)
                 self.action_finished.emit("pair", True, msg, True)
             else:
-                msg = f"❌ 配对失败\n{output}" if output else "❌ 配对失败，请检查配对码和端口"
+                msg = tr('❌ 配对失败\n{p0}', p0=output) if output else tr('❌ 配对失败，请检查配对码和端口')
                 self.action_finished.emit("pair", False, msg, False)
         except subprocess.TimeoutExpired:
-            self.action_finished.emit("pair", False, "❌ 配对超时，请在手机上重新生成配对码", False)
+            self.action_finished.emit("pair", False, tr('❌ 配对超时，请在手机上重新生成配对码'), False)
         except Exception as e:
-            self.action_finished.emit("pair", False, f"❌ 错误：{e}", False)
+            self.action_finished.emit("pair", False, tr('❌ 错误：{p0}', p0=e), False)
 
     @staticmethod
     def _classic_wifi_target(serial: str) -> bool:
@@ -108,9 +110,9 @@ class WifiActionWorker(QThread):
         target = str(self.params.get("serial") or "")
         if not self._classic_wifi_target(target):
             self.action_finished.emit("disable_tcpip", False,
-                                      "只允许关闭已选中的经典 5555 无线 ADB 连接。", False)
+                                      tr('只允许关闭已选中的经典 5555 无线 ADB 连接。'), False)
             return
-        self.progress.emit(f"正在请求 {target} 切回 USB 调试模式…")
+        self.progress.emit(tr('正在请求 {p0} 切回 USB 调试模式…', p0=target))
         try:
             response = subprocess.run(
                 [ADB, "-s", target, "usb"], capture_output=True,
@@ -120,9 +122,7 @@ class WifiActionWorker(QThread):
             if response.returncode != 0 or "restarting in usb mode" not in output.lower():
                 self.action_finished.emit(
                     "disable_tcpip", False,
-                    "无法确认无线监听已关闭。请使用 USB 连接执行 adb usb，"
-                    "或在手机开发者选项关闭调试，勿只执行 adb disconnect。"
-                    f"\n{output.strip()}", False,
+                    tr('无法确认无线监听已关闭。请使用 USB 连接执行 adb usb，或在手机开发者选项关闭调试，勿只执行 adb disconnect。\n{p0}', p0=output.strip()), False,
                 )
                 return
             try:
@@ -134,19 +134,18 @@ class WifiActionWorker(QThread):
                 pass
             self.action_finished.emit(
                 "disable_tcpip", True,
-                "已收到设备切回 USB 模式的确认，已断开本机无线会话。"
-                "如要继续使用 USB，请连接数据线。", True,
+                tr('已收到设备切回 USB 模式的确认，已断开本机无线会话。如要继续使用 USB，请连接数据线。'), True,
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
             self.action_finished.emit(
                 "disable_tcpip", False,
-                f"无法确认无线监听已关闭：{exc}。请在手机上关闭调试或重新连接 USB 执行 adb usb。",
+                tr('无法确认无线监听已关闭：{p0}。请在手机上关闭调试或重新连接 USB 执行 adb usb。', p0=exc),
                 False,
             )
 
     def _run_usb_to_wifi(self) -> None:
         """Legacy TCP ADB: never silently choose among multiple USB devices."""
-        self.progress.emit("正在检查 USB 调试设备…")
+        self.progress.emit(tr('正在检查 USB 调试设备…'))
         tcpip_enabled = False
         serial = ""
         target = ""
@@ -154,7 +153,7 @@ class WifiActionWorker(QThread):
             result = subprocess.run([ADB, "devices", "-l"], capture_output=True,
                                     text=True, timeout=5)
             if result.returncode != 0:
-                raise RuntimeError("ADB 无法列出设备")
+                raise RuntimeError(tr('ADB 无法列出设备'))
             usb_serials = []
             for line in result.stdout.splitlines()[1:]:
                 parts = line.strip().split()
@@ -165,14 +164,14 @@ class WifiActionWorker(QThread):
             chosen = str(self.params.get("serial") or "")
             if chosen:
                 if chosen not in usb_serials:
-                    raise RuntimeError("选中的 USB 设备已断开或不再可用")
+                    raise RuntimeError(tr('选中的 USB 设备已断开或不再可用'))
                 serial = chosen
             elif len(usb_serials) == 1:
                 serial = usb_serials[0]
             elif len(usb_serials) > 1:
-                raise RuntimeError("检测到多台 USB 设备，请先在主界面选择目标设备")
+                raise RuntimeError(tr('检测到多台 USB 设备，请先在主界面选择目标设备'))
             else:
-                raise RuntimeError("未检测到已授权的 USB Android 设备")
+                raise RuntimeError(tr('未检测到已授权的 USB Android 设备'))
 
             r_ip = subprocess.run(
                 [ADB, "-s", serial, "shell", "ip -f inet addr show wlan0"],
@@ -197,10 +196,10 @@ class WifiActionWorker(QThread):
                         or addr.is_link_local or addr.is_unspecified):
                     raise ValueError()
             except ValueError:
-                raise RuntimeError("无法确认手机使用可信的局域网 IP，请改用 Android 11+ 配对码模式")
+                raise RuntimeError(tr('无法确认手机使用可信的局域网 IP，请改用 Android 11+ 配对码模式'))
 
             target = f"{ip}:5555"
-            self.progress.emit(f"正在为设备 {serial} 开启经典 TCP ADB…")
+            self.progress.emit(tr('正在为设备 {p0} 开启经典 TCP ADB…', p0=serial))
             # The TCP command may succeed even if the response gets lost.
             # Always try a rollback if we cannot confirm the resulting state.
             tcpip_enabled = True
@@ -212,7 +211,7 @@ class WifiActionWorker(QThread):
                     (tcp.stdout or "") + (tcp.stderr or "")).lower():
                 # If the response is ambiguous, a reset attempt is safer than
                 # treating the classic service as closed.
-                raise RuntimeError("手机未确认启动 TCP 调试")
+                raise RuntimeError(tr('手机未确认启动 TCP 调试'))
             time.sleep(1)
             conn = subprocess.run(
                 [ADB, "connect", target], capture_output=True,
@@ -223,11 +222,10 @@ class WifiActionWorker(QThread):
                 detail.lower().startswith("connected to ")
                 or detail.lower().startswith("already connected to ")
             ):
-                raise RuntimeError(f"无线连接失败：{detail or '未知错误'}")
+                raise RuntimeError(tr('无线连接失败：{p0}', p0=detail or tr('未知错误')))
             self.action_finished.emit(
                 "usb_to_wifi", True,
-                f"已连接 {target}。经典 TCP ADB 5555 可能继续监听，"
-                "仅限可信私有网络；使用结束后请从本工具选择「关闭经典无线调试」。",
+                tr('已连接 {p0}。经典 TCP ADB 5555 可能继续监听，仅限可信私有网络；使用结束后请从本工具选择「关闭经典无线调试」。', p0=target),
                 True,
             )
         except (OSError, subprocess.TimeoutExpired, RuntimeError) as exc:
@@ -249,9 +247,8 @@ class WifiActionWorker(QThread):
                     except (OSError, subprocess.TimeoutExpired):
                         pass
             suffix = (
-                " 已收到切回 USB 模式的确认。"
+                tr(' 已收到切回 USB 模式的确认。')
                 if rollback_ok else
-                " 若已开启 5555，无法确认监听已关闭；请通过 USB 执行 adb usb，"
-                "或在手机开发者选项关闭调试。"
+                tr(' 若已开启 5555，无法确认监听已关闭；请通过 USB 执行 adb usb，或在手机开发者选项关闭调试。')
             )
-            self.action_finished.emit("usb_to_wifi", False, f"无线连接失败：{exc}。{suffix}", False)
+            self.action_finished.emit("usb_to_wifi", False, tr('无线连接失败：{p0}。{p1}', p0=exc, p1=suffix), False)

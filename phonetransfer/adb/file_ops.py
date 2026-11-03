@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+from phonetransfer.i18n import tr
+
 import os
 import posixpath
 import re
@@ -137,15 +139,15 @@ def remote_mkdir(remote_dir: str) -> tuple[bool, str]:
         target = validate_remote_storage_path(remote_dir)
         validate_existing_remote_storage_path(posixpath.dirname(target), allow_storage_root=True)
     except Exception as exc:
-        return False, f"拒绝不安全的新建目录路径：{exc}"
+        return False, tr('拒绝不安全的新建目录路径：{p0}', p0=exc)
 
     base_name = posixpath.basename(target)
     if not base_name or any(c in base_name for c in ("\0", ":", "*", "?", '"', "<", ">", "|", "\\")):
-        return False, "文件夹名称包含非法字符"
+        return False, tr('文件夹名称包含非法字符')
 
     res = adb_shell(f"mkdir -p {shell_quote(target)}", timeout=15)
     if res.returncode != 0:
-        err = (res.stderr or res.stdout or "创建文件夹失败").strip()
+        err = (res.stderr or res.stdout or tr('创建文件夹失败')).strip()
         return False, err
     return True, ""
 
@@ -158,13 +160,13 @@ def remote_rename(old_path: str, new_path: str) -> tuple[bool, str]:
         validate_existing_remote_storage_path(posixpath.dirname(old_p), allow_storage_root=True)
         validate_existing_remote_storage_path(posixpath.dirname(new_p), allow_storage_root=True)
     except Exception as exc:
-        return False, f"拒绝不安全的重命名路径：{exc}"
+        return False, tr('拒绝不安全的重命名路径：{p0}', p0=exc)
     if old_p == new_p:
         return True, ""
 
     new_name = posixpath.basename(new_p)
     if not new_name or any(c in new_name for c in ("\0", ":", "*", "?", '"', "<", ">", "|", "\\", "/")):
-        return False, "新名称包含非法字符"
+        return False, tr('新名称包含非法字符')
 
     # Never silently replace a different file or move the source into a
     # pre-existing directory with the requested target name.
@@ -173,9 +175,9 @@ def remote_rename(old_path: str, new_path: str) -> tuple[bool, str]:
         timeout=10,
     )
     if exists.returncode == 0:
-        return False, "目标名称已存在，请使用其他名称"
+        return False, tr('目标名称已存在，请使用其他名称')
     if exists.returncode != 1:
-        return False, "无法确认目标名称是否可用，已取消重命名"
+        return False, tr('无法确认目标名称是否可用，已取消重命名')
 
     # -n prevents clobbering if the destination appears after the check.
     # Verify source disappeared: some mv implementations return success for
@@ -186,7 +188,7 @@ def remote_rename(old_path: str, new_path: str) -> tuple[bool, str]:
     )
     res = adb_shell(move_cmd, timeout=15)
     if res.returncode != 0:
-        err = (res.stderr or res.stdout or "移动未完成，目标可能已被占用").strip()
+        err = (res.stderr or res.stdout or tr('移动未完成，目标可能已被占用')).strip()
         return False, err
 
     ext_old = posixpath.splitext(old_p)[1].lower()
@@ -212,19 +214,19 @@ def validate_remote_storage_path(path: str) -> str:
     /sdcard/Download/../../data would otherwise escape the shared-storage area.
     """
     if not isinstance(path, str) or not path or any(ord(ch) < 32 for ch in path):
-        raise ValueError("路径为空或包含控制字符")
+        raise ValueError(tr('路径为空或包含控制字符'))
     cleaned = path.rstrip("/")
     if not cleaned.startswith("/") or posixpath.normpath(cleaned) != cleaned:
-        raise ValueError("路径不是规范的绝对路径")
+        raise ValueError(tr('路径不是规范的绝对路径'))
     if any(part in (".", "..") for part in cleaned.split("/")):
-        raise ValueError("路径包含不安全的相对目录")
+        raise ValueError(tr('路径包含不安全的相对目录'))
     for root in _SAFE_STORAGE_ROOTS:
         if cleaned.startswith(root + "/"):
             return cleaned
     parts = cleaned.split("/")
     if len(parts) >= 4 and _REMOVABLE_STORAGE_ROOT.fullmatch("/".join(parts[:3])):
         return cleaned
-    raise ValueError("仅允许操作手机共享存储目录中的项目")
+    raise ValueError(tr('仅允许操作手机共享存储目录中的项目'))
 
 
 def validate_existing_remote_storage_path(
@@ -233,7 +235,7 @@ def validate_existing_remote_storage_path(
     """Check resolved shared-storage paths without permitting root deletion."""
     result = adb_shell(f"readlink -f {shell_quote(path)}", timeout=10)
     if result.returncode != 0 or len(result.stdout.splitlines()) != 1:
-        raise ValueError("无法验证手机端路径真实位置，已拒绝危险操作")
+        raise ValueError(tr('无法验证手机端路径真实位置，已拒绝危险操作'))
     resolved = result.stdout.strip()
     if allow_storage_root and (
         resolved in _SAFE_STORAGE_ROOTS
@@ -243,7 +245,7 @@ def validate_existing_remote_storage_path(
     try:
         validate_remote_storage_path(resolved)
     except ValueError as exc:
-        raise ValueError("目标路径解析后超出共享存储安全范围") from exc
+        raise ValueError(tr('目标路径解析后超出共享存储安全范围')) from exc
 
 
 FORBIDDEN_DELETE_PATHS = {
@@ -267,21 +269,21 @@ FORBIDDEN_DELETE_PATHS = {
 def remote_delete(paths: list[str]) -> tuple[bool, str]:
     """在手机端安全删除文件或文件夹（防误删系统/存储根目录），并同步通知媒体库。"""
     if not paths:
-        return False, "未选择要删除的项目"
+        return False, tr('未选择要删除的项目')
 
     valid_paths: list[str] = []
     for p in paths:
         try:
             cleaned = validate_remote_storage_path(p)
             if cleaned in FORBIDDEN_DELETE_PATHS:
-                raise ValueError("禁止删除存储根目录")
+                raise ValueError(tr('禁止删除存储根目录'))
             validate_existing_remote_storage_path(cleaned)
         except Exception as exc:
-            return False, f"拒绝不安全的删除路径 {p!r}：{exc}"
+            return False, tr('拒绝不安全的删除路径 {p0!r}：{p1}', p0=p, p1=exc)
         valid_paths.append(cleaned)
 
     if not valid_paths:
-        return False, "未找到有效的删除路径"
+        return False, tr('未找到有效的删除路径')
 
     chunk_size = 50
     for i in range(0, len(valid_paths), chunk_size):
@@ -289,7 +291,7 @@ def remote_delete(paths: list[str]) -> tuple[bool, str]:
         quoted = " ".join(shell_quote(item) for item in chunk)
         res = adb_shell(f"rm -rf {quoted}", timeout=30)
         if res.returncode != 0:
-            err = (res.stderr or res.stdout or "删除失败").strip()
+            err = (res.stderr or res.stdout or tr('删除失败')).strip()
             return False, err
 
     media_paths = [p for p in valid_paths if posixpath.splitext(p)[1].lower() in MEDIA_SCAN_SUFFIXES]
@@ -407,13 +409,13 @@ def remote_is_file(remote: str) -> bool:
 def ensure_remote_dir(dest: str) -> tuple[bool, str]:
     dest = dest.rstrip("/")
     if not dest.startswith("/"):
-        return False, f"目标路径需以 / 开头，例如 /sdcard/Download（当前：{dest}）"
+        return False, tr('目标路径需以 / 开头，例如 /sdcard/Download（当前：{p0}）', p0=dest)
     result = adb_shell(f"mkdir -p {shell_quote(dest)}")
     if result.returncode != 0:
         err = (result.stderr or result.stdout or "").strip()
-        return False, f"无法创建手机目录 {dest}：{err or '未知错误'}"
+        return False, tr('无法创建手机目录 {p0}：{p1}', p0=dest, p1=err or tr('未知错误'))
     if not remote_exists(dest):
-        return False, f"手机目录不存在或无法访问：{dest}"
+        return False, tr('手机目录不存在或无法访问：{p0}', p0=dest)
     return True, ""
 
 
@@ -430,9 +432,9 @@ def ensure_local_dir(dest: str) -> tuple[bool, str]:
     try:
         path.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
-        return False, f"无法创建电脑目录 {path}：{exc}"
+        return False, tr('无法创建电脑目录 {p0}：{p1}', p0=path, p1=exc)
     if not path.is_dir():
-        return False, f"电脑目标路径不是文件夹：{path}"
+        return False, tr('电脑目标路径不是文件夹：{p0}', p0=path)
     return True, ""
 
 
@@ -459,29 +461,29 @@ def resolve_remote_path(
 
     if is_dir:
         if remote_is_dir(remote):
-            log(f"同步到已有文件夹：{name}")
+            log(tr('同步到已有文件夹：{p0}', p0=name))
             return remote
         if remote_is_file(remote):
-            raise RuntimeError(f"无法同步，同名路径已被文件占用：{name}")
+            raise RuntimeError(tr('无法同步，同名路径已被文件占用：{p0}', p0=name))
         return remote
 
     if remote_is_dir(remote):
-        raise RuntimeError(f"目标路径已被同名文件夹占用：{name}")
+        raise RuntimeError(tr('目标路径已被同名文件夹占用：{p0}', p0=name))
     if not remote_exists(remote):
         return remote
 
     if sync_mode == "overwrite":
-        log(f"覆盖同名文件：{name}")
+        log(tr('覆盖同名文件：{p0}', p0=name))
         return remote
 
-    log(f"目标文件已存在：{name}")
+    log(tr('目标文件已存在：{p0}', p0=name))
     for attempt in range(99):
         new_name = timestamped_basename(name, attempt)
         candidate = f"{dest}/{new_name}"
         if not remote_exists(candidate):
-            log(f"重命名为 {new_name}")
+            log(tr('重命名为 {p0}', p0=new_name))
             return candidate
-    raise RuntimeError(f"无法为 {name} 生成唯一文件名")
+    raise RuntimeError(tr('无法为 {p0} 生成唯一文件名', p0=name))
 
 
 def resolve_local_path(
@@ -496,27 +498,27 @@ def resolve_local_path(
     candidate = base / name
     if is_dir:
         if candidate.is_dir():
-            log(f"同步到已有文件夹：{name}")
+            log(tr('同步到已有文件夹：{p0}', p0=name))
             return candidate
         if candidate.is_file():
-            raise RuntimeError(f"无法同步，同名路径已被文件占用：{name}")
+            raise RuntimeError(tr('无法同步，同名路径已被文件占用：{p0}', p0=name))
         return candidate
 
     if not candidate.exists():
         return candidate
 
     if sync_mode == "overwrite":
-        log(f"覆盖同名文件：{name}")
+        log(tr('覆盖同名文件：{p0}', p0=name))
         return candidate
 
-    log(f"目标文件已存在：{name}")
+    log(tr('目标文件已存在：{p0}', p0=name))
     for attempt in range(99):
         new_name = timestamped_basename(name, attempt)
         alt = base / new_name
         if not alt.exists():
-            log(f"重命名为 {new_name}")
+            log(tr('重命名为 {p0}', p0=new_name))
             return alt
-    raise RuntimeError(f"无法为 {name} 生成唯一文件名")
+    raise RuntimeError(tr('无法为 {p0} 生成唯一文件名', p0=name))
 
 
 def should_skip_upload(rel: str) -> bool:
@@ -573,23 +575,23 @@ def verify_local_file(path: Path) -> tuple[bool, str]:
         try:
             src = path.resolve()
         except OSError:
-            return False, f"符号链接无效：{path.name}"
+            return False, tr('符号链接无效：{p0}', p0=path.name)
     try:
         with src.open("rb") as handle:
             handle.read(1)
     except OSError:
-        return False, f"无法读取「{path.name}」，请确认文件已下载到本机（iCloud 文件需先点开下载）"
+        return False, tr('无法读取「{p0}」，请确认文件已下载到本机（iCloud 文件需先点开下载）', p0=path.name)
     return True, ""
 
 
 def verify_local_pushable(path: Path) -> tuple[bool, str]:
     if not path.exists():
-        return False, f"本地路径不存在：{path}"
+        return False, tr('本地路径不存在：{p0}', p0=path)
     if path.is_dir():
         for file_path, rel in iter_local_files(path):
             ok, err = verify_local_file(file_path)
             if not ok:
-                return False, f"{err}\n路径：{rel}"
+                return False, tr('{p0}\n路径：{p1}', p0=err, p1=rel)
         return True, ""
     return verify_local_file(path)
 

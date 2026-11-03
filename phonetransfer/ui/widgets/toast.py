@@ -21,6 +21,7 @@ class TransferToast(QFrame):
         self._icon.setObjectName("toastIcon")
         self._text = QLabel("")
         self._text.setObjectName("toastText")
+        self._text.setWordWrap(True)
         row.addWidget(self._icon)
         row.addWidget(self._text)
         self._opacity = QGraphicsOpacityEffect(self)
@@ -36,6 +37,9 @@ class TransferToast(QFrame):
         if self._fade_anim is not None:
             self._fade_anim.stop()
             self._fade_anim = None
+        parent = self.parentWidget()
+        if parent is not None:
+            self._text.setMaximumWidth(max(120, parent.width() - 100))
         self._text.setText(text)
         self.adjustSize()
         self._reposition()

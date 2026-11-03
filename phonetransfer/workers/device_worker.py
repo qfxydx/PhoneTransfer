@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+from phonetransfer.i18n import tr
+
 import re
 import subprocess
 import time
@@ -43,7 +45,7 @@ class DeviceWorker(QObject):
 
     def _run(self, gen: int, force_mdns: bool = False) -> None:
         # adb 偶发 busy / offline：轻量重试一次，减少误报
-        last_err = "adb 返回非零"
+        last_err = tr('adb 返回非零')
         for attempt in range(2):
             try:
                 r = subprocess.run(
@@ -53,11 +55,11 @@ class DeviceWorker(QObject):
                     timeout=15,
                 )
                 if r.returncode != 0:
-                    last_err = (r.stderr or r.stdout or "adb 返回非零").strip()
+                    last_err = (r.stderr or r.stdout or tr('adb 返回非零')).strip()
                     if attempt == 0:
                         time.sleep(0.35)
                         continue
-                    self.failed.emit(f"adb devices 失败：{last_err}", gen)
+                    self.failed.emit(tr('adb devices 失败：{p0}', p0=last_err), gen)
                     return
 
                 lines = [ln.strip() for ln in r.stdout.splitlines() if ln.strip()]
@@ -193,6 +195,6 @@ class DeviceWorker(QObject):
                 if attempt == 0:
                     time.sleep(0.35)
                     continue
-                self.failed.emit(f"检测失败：{last_err}", gen)
+                self.failed.emit(tr('检测失败：{p0}', p0=last_err), gen)
                 return
 

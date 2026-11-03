@@ -1,0 +1,13 @@
+{
+  "phonetransfer/adb/core.py": "189589cac8260d37d73e2063d0bdf6933f20c482da1989d788d9f4b8741b8cb4",
+  "phonetransfer/adb/file_ops.py": "0f80abc2f121301272926bab634257534e0e1ec74bddfc6679204d13560010cf",
+  "phonetransfer/adb/media.py": "c02d63d707b9b7f3349fb49d64779537a2e2c6d9da0bd872191fee22b5c62245",
+  "phonetransfer/adb/scrcpy.py": "d51a90aa470a91f477879835eb3dc35a4cd28bd9ea13bef7768d9b63a1c65051",
+  "phonetransfer/adb/text_ops.py": "0063767b428e2abce0e0401d9472ae241154451c9bfc0b83d4deb8c6ab00b1cb",
+  "phonetransfer/adb/transfer.py": "9722edd1807beb0731e709726fc36d1430fb517b046dc5295e8e9098865f2198",
+  "phonetransfer/workers/device_worker.py": "9bef06fce796725b42095895cab2b781e755bb93ddf0c09b52dc10acf1ee3342",
+  "phonetransfer/workers/preview_worker.py": "67bff56d66e3cee02edd0068de1507e1d800ee58eff38fbcc45437728541012c",
+  "phonetransfer/workers/remote_op_worker.py": "9b9c392fab4ef49a58a31f259f28079ee45328ac6a1b1473ca4a39fffe5cbff7",
+  "phonetransfer/workers/transfer_worker.py": "8d05fa09cc14bffa76bfd67d3476dd08f023b7c0b3a1dc748d76cf1d89839d28",
+  "phonetransfer/workers/wifi_worker.py": "a57cbe968e8eaaba197f222efec3f205598cabe46c810dd9d2b15dc8f03ae24c"
+}

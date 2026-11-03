@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from phonetransfer.i18n import tr
+
 from pathlib import Path
 import posixpath
 
@@ -88,12 +90,12 @@ class SourceCard(QFrame):
         header_l.setSpacing(4)
         header_l.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        eyebrow = QLabel("来源")
+        eyebrow = QLabel(tr('来源'))
         eyebrow.setObjectName("eyebrow")
         eyebrow.setAlignment(Qt.AlignmentFlag.AlignCenter)
         header_l.addWidget(eyebrow)
 
-        title = QLabel("这台电脑")
+        title = QLabel(tr('这台电脑'))
         title.setObjectName("sectionTitle")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         header_l.addWidget(title)
@@ -102,7 +104,7 @@ class SourceCard(QFrame):
         self.btn_refresh = QToolButton()
         self.btn_refresh.setObjectName("refreshBtn")
         self.btn_refresh.setText(sym("arrow.clockwise"))
-        self.btn_refresh.setToolTip("刷新列表（按创建时间重新排序）")
+        self.btn_refresh.setToolTip(tr('刷新列表（按创建时间重新排序）'))
         self.btn_refresh.setFixedSize(28, 28)
         self.btn_refresh.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_refresh.clicked.connect(self.refresh_paths)
@@ -131,12 +133,13 @@ class SourceCard(QFrame):
         icon_box_l.addWidget(icon)
         empty_l.addWidget(icon_box, 0, Qt.AlignmentFlag.AlignCenter)
 
-        main = QLabel("拖入文件以传输")
+        main = QLabel(tr('拖入文件以传输'))
         main.setObjectName("sectionSubtitle")
+        main.setWordWrap(True)
         main.setAlignment(Qt.AlignmentFlag.AlignCenter)
         empty_l.addWidget(main)
 
-        sub = QLabel("支持多选，可点击下方按钮")
+        sub = QLabel(tr('支持多选，可点击下方按钮'))
         sub.setObjectName("emptyHint")
         sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
         sub.setWordWrap(True)
@@ -144,7 +147,7 @@ class SourceCard(QFrame):
         empty_l.addWidget(sub)
 
         empty_l.addSpacing(8)
-        self.btn_pick = QPushButton("选择文件…")
+        self.btn_pick = QPushButton(tr('选择文件…'))
         self.btn_pick.setObjectName("pickBtn")
         self.btn_pick.setCursor(Qt.CursorShape.PointingHandCursor)
         empty_l.addWidget(self.btn_pick, 0, Qt.AlignmentFlag.AlignCenter)
@@ -157,7 +160,7 @@ class SourceCard(QFrame):
 
         self.search_edit = QLineEdit()
         self.search_edit.setObjectName("filterSearchEdit")
-        self.search_edit.setPlaceholderText("搜索已选文件 (Esc 清空)…")
+        self.search_edit.setPlaceholderText(tr('搜索已选文件 (Esc 清空)…'))
         self.search_edit.setClearButtonEnabled(True)
         self.search_edit.textChanged.connect(self._on_search_changed)
         list_outer.addWidget(self.search_edit)
@@ -191,8 +194,9 @@ class SourceCard(QFrame):
         footer.setContentsMargins(0, 8, 0, 0)
         footer.setSpacing(8)
         self.summary = QLabel("")
+        self.summary.setWordWrap(True)
         self.summary.setObjectName("summaryLabel")
-        self.btn_clear = QPushButton("清空")
+        self.btn_clear = QPushButton(tr('清空'))
         self.btn_clear.setObjectName("clearBtn")
         self.btn_clear.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_clear.clicked.connect(self.clear_paths)
@@ -387,11 +391,11 @@ class SourceCard(QFrame):
             if q:
                 vis = self._visible_paths()
                 matched_bytes = sum(path_size(Path(p)) for p in vis)
-                self.summary.setText(f"匹配 {len(vis)}/{len(self._paths)} 项 · 共 {human_size(matched_bytes)}")
+                self.summary.setText(tr('匹配 {p0}/{p1} 项 · 共 {p2}', p0=len(vis), p1=len(self._paths), p2=human_size(matched_bytes)))
             else:
                 total_bytes = sum(path_size(Path(p)) for p in self._paths)
                 n = len(self._paths)
-                self.summary.setText(f"{n} 个文件 · 共 {human_size(total_bytes)}")
+                self.summary.setText(tr('{p0} 个文件 · 共 {p1}', p0=n, p1=human_size(total_bytes)))
         else:
             self.summary.setText("")
 
@@ -403,7 +407,7 @@ class SourceCard(QFrame):
 
         vis = self._visible_paths()
         if not vis and self._paths:
-            no_match = QLabel("无匹配文件 (按 Esc 重置)")
+            no_match = QLabel(tr('无匹配文件 (按 Esc 重置)'))
             no_match.setObjectName("emptyHint")
             no_match.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self.file_layout.addWidget(no_match)
@@ -463,10 +467,10 @@ class SourceCard(QFrame):
         h.addLayout(text_col, 1)
 
         if is_apk:
-            btn_install = QPushButton("安装")
+            btn_install = QPushButton(tr('安装'))
             btn_install.setObjectName("installRowBtn")
             btn_install.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn_install.setToolTip("直接将此 APK 安装到手机")
+            btn_install.setToolTip(tr('直接将此 APK 安装到手机'))
             btn_install.clicked.connect(lambda _=False, apk=path: self.install_requested.emit(apk))
             h.addWidget(btn_install)
 
@@ -474,7 +478,7 @@ class SourceCard(QFrame):
         rm.setObjectName("removeBtn")
         rm.setFixedSize(24, 24)
         rm.setCursor(Qt.CursorShape.PointingHandCursor)
-        rm.setToolTip("移除")
+        rm.setToolTip(tr('移除'))
         rm.clicked.connect(lambda _=False, pt=path: self.remove_path(pt))
         h.addWidget(rm)
 
@@ -536,12 +540,12 @@ class DestinationCard(QFrame):
         header_l.setSpacing(4)
         header_l.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        eyebrow = QLabel("目标")
+        eyebrow = QLabel(tr('目标'))
         eyebrow.setObjectName("eyebrow")
         eyebrow.setAlignment(Qt.AlignmentFlag.AlignCenter)
         header_l.addWidget(eyebrow)
 
-        title = QLabel("手机存储")
+        title = QLabel(tr('手机存储'))
         title.setObjectName("sectionTitle")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         header_l.addWidget(title)
@@ -549,7 +553,7 @@ class DestinationCard(QFrame):
         outer.addWidget(header)
         outer.addSpacing(16)
 
-        lab = QLabel("保存位置")
+        lab = QLabel(tr('保存位置'))
         lab.setObjectName("sectionLabel")
         outer.addWidget(lab)
 
@@ -568,13 +572,13 @@ class DestinationCard(QFrame):
         self.preset_group = QButtonGroup(self)
         self.preset_group.setExclusive(True)
         self.preset_buttons: list[QPushButton] = []
-        segment_labels = [name for name, _ in DEST_PRESETS] + ["自定义"]
+        segment_labels = [name for name, _ in DEST_PRESETS] + [tr('自定义')]
         for i, label in enumerate(segment_labels):
-            btn = QPushButton(label)
+            btn = QPushButton(tr(label))
             btn.setObjectName("quickTagBtn")
             btn.setCheckable(True)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.setFixedHeight(26)
+            btn.setMinimumHeight(28)
             if i < len(DEST_PRESETS):
                 btn.setProperty("dest_path", DEST_PRESETS[i][1])
             self.preset_group.addButton(btn, i)
@@ -621,8 +625,9 @@ class DestinationCard(QFrame):
         self.space_spinner.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.space_spinner.setVisible(False)
 
-        self.space_label = QLabel("可用 —")
+        self.space_label = QLabel(tr('可用 —'))
         self.space_label.setObjectName("spaceLabel")
+        self.space_label.setWordWrap(True)
         self.space_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         space_l.addWidget(self.space_spinner)
@@ -647,11 +652,11 @@ class DestinationCard(QFrame):
                 self.space_spinner.setVisible(True)
                 self._spinner_timer.start()
             if self._last_valid_space:
-                self.space_label.setText(f"可用 {self._last_valid_space}")
-                self.space_wrap.setToolTip("正在重新检测可用空间…")
+                self.space_label.setText(tr('可用 {p0}', p0=self._last_valid_space))
+                self.space_wrap.setToolTip(tr('正在重新检测可用空间…'))
             else:
-                self.space_label.setText("正在检测可用空间…")
-                self.space_wrap.setToolTip("正在检测可用空间…")
+                self.space_label.setText(tr('正在检测可用空间…'))
+                self.space_wrap.setToolTip(tr('正在检测可用空间…'))
         else:
             self._spinner_timer.stop()
             self.space_spinner.setVisible(False)
@@ -679,17 +684,17 @@ class DestinationCard(QFrame):
         clean = text.strip() if text else ""
         if clean and clean not in ("—", "-", ""):
             self._last_valid_space = clean
-            self.space_label.setText(f"可用 {clean}")
+            self.space_label.setText(tr('可用 {p0}', p0=clean))
         else:
             if self._last_valid_space:
-                self.space_label.setText(f"可用 {self._last_valid_space}")
+                self.space_label.setText(tr('可用 {p0}', p0=self._last_valid_space))
             else:
-                self.space_label.setText("可用 —")
+                self.space_label.setText(tr('可用 —'))
 
     def reset_available_space(self) -> None:
         self._last_valid_space = None
         self.set_storage_busy(False)
-        self.space_label.setText("可用 —")
+        self.space_label.setText(tr('可用 —'))
 
     def _emit_dest(self) -> None:
         self.destination_changed.emit(self.destination())
@@ -711,18 +716,18 @@ class LocalDestinationCard(QFrame):
         header_l.setContentsMargins(0, 0, 0, 0)
         header_l.setSpacing(4)
         header_l.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        eyebrow = QLabel("目标")
+        eyebrow = QLabel(tr('目标'))
         eyebrow.setObjectName("eyebrow")
         eyebrow.setAlignment(Qt.AlignmentFlag.AlignCenter)
         header_l.addWidget(eyebrow)
-        title = QLabel("这台电脑")
+        title = QLabel(tr('这台电脑'))
         title.setObjectName("sectionTitle")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         header_l.addWidget(title)
         outer.addWidget(header)
         outer.addSpacing(16)
 
-        lab = QLabel("保存位置")
+        lab = QLabel(tr('保存位置'))
         lab.setObjectName("sectionLabel")
         outer.addWidget(lab)
 
@@ -734,16 +739,16 @@ class LocalDestinationCard(QFrame):
 
         segment_frame = QFrame()
         segment_frame.setObjectName("segmentControl")
-        segment_row = QHBoxLayout(segment_frame)
+        segment_row = QGridLayout(segment_frame)
         segment_row.setContentsMargins(2, 2, 2, 2)
         segment_row.setSpacing(0)
 
         self.preset_group = QButtonGroup(self)
         self.preset_group.setExclusive(True)
         self.preset_buttons: list[QPushButton] = []
-        segment_labels = [name for name, _ in LOCAL_DEST_PRESETS] + ["自定义"]
+        segment_labels = [name for name, _ in LOCAL_DEST_PRESETS] + [tr('自定义')]
         for i, label in enumerate(segment_labels):
-            btn = QPushButton(label)
+            btn = QPushButton(tr(label))
             btn.setObjectName("segmentBtn")
             btn.setCheckable(True)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -753,7 +758,7 @@ class LocalDestinationCard(QFrame):
             if i < len(LOCAL_DEST_PRESETS):
                 btn.setProperty("dest_path", LOCAL_DEST_PRESETS[i][1])
             self.preset_group.addButton(btn, i)
-            segment_row.addWidget(btn, 1)
+            segment_row.addWidget(btn, i // 2, i % 2)
             self.preset_buttons.append(btn)
         dest_content_l.addWidget(segment_frame)
 
@@ -786,8 +791,9 @@ class LocalDestinationCard(QFrame):
         self.space_spinner.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.space_spinner.setVisible(False)
 
-        self.space_label = QLabel("可用 —")
+        self.space_label = QLabel(tr('可用 —'))
         self.space_label.setObjectName("spaceLabel")
+        self.space_label.setWordWrap(True)
         self.space_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         space_l.addWidget(self.space_spinner)
@@ -811,11 +817,11 @@ class LocalDestinationCard(QFrame):
                 self.space_spinner.setVisible(True)
                 self._spinner_timer.start()
             if self._last_valid_space:
-                self.space_label.setText(f"可用 {self._last_valid_space}")
-                self.space_wrap.setToolTip("正在重新检测可用空间…")
+                self.space_label.setText(tr('可用 {p0}', p0=self._last_valid_space))
+                self.space_wrap.setToolTip(tr('正在重新检测可用空间…'))
             else:
-                self.space_label.setText("正在检测可用空间…")
-                self.space_wrap.setToolTip("正在检测可用空间…")
+                self.space_label.setText(tr('正在检测可用空间…'))
+                self.space_wrap.setToolTip(tr('正在检测可用空间…'))
         else:
             self._spinner_timer.stop()
             self.space_spinner.setVisible(False)
@@ -843,17 +849,17 @@ class LocalDestinationCard(QFrame):
         clean = text.strip() if text else ""
         if clean and clean not in ("—", "-", ""):
             self._last_valid_space = clean
-            self.space_label.setText(f"可用 {clean}")
+            self.space_label.setText(tr('可用 {p0}', p0=clean))
         else:
             if self._last_valid_space:
-                self.space_label.setText(f"可用 {self._last_valid_space}")
+                self.space_label.setText(tr('可用 {p0}', p0=self._last_valid_space))
             else:
-                self.space_label.setText("可用 —")
+                self.space_label.setText(tr('可用 —'))
 
     def reset_available_space(self) -> None:
         self._last_valid_space = None
         self.set_storage_busy(False)
-        self.space_label.setText("可用 —")
+        self.space_label.setText(tr('可用 —'))
 
     def _emit_dest(self) -> None:
         self.destination_changed.emit(self.destination())
@@ -903,7 +909,7 @@ class BrowseEntryRow(QFrame):
         text_col.setSpacing(1)
         name = QLabel(entry.name)
         name.setObjectName("fileName")
-        size = QLabel("文件夹" if entry.is_dir else human_size(entry.size))
+        size = QLabel(tr('文件夹') if entry.is_dir else human_size(entry.size))
         size.setObjectName("fileSize")
         text_col.addWidget(name)
         text_col.addWidget(size)
@@ -915,7 +921,7 @@ class BrowseEntryRow(QFrame):
             btn_open.setText(sym("chevron.right"))
             btn_open.setFixedSize(26, 26)
             btn_open.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn_open.setToolTip("进入文件夹")
+            btn_open.setToolTip(tr('进入文件夹'))
             btn_open.clicked.connect(
                 lambda _checked=False, p=entry.path: self.open_requested.emit(p)
             )
@@ -926,7 +932,7 @@ class BrowseEntryRow(QFrame):
         self.btn_more.setText("···")
         self.btn_more.setFixedSize(24, 24)
         self.btn_more.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_more.setToolTip("更多操作")
+        self.btn_more.setToolTip(tr('更多操作'))
         self.btn_more.clicked.connect(self._show_context_menu_from_btn)
         h.addWidget(self.btn_more)
 
@@ -949,19 +955,19 @@ class BrowseEntryRow(QFrame):
         self.row_clicked.emit(self._entry.path)
         menu = QMenu(self)
         if not self._entry.is_dir:
-            act_preview = menu.addAction("空格预览")
+            act_preview = menu.addAction(tr('空格预览'))
             act_preview.triggered.connect(
                 lambda: self.preview_requested.emit(self._entry.path, self._entry.size)
             )
         else:
-            act_open = menu.addAction("进入文件夹")
+            act_open = menu.addAction(tr('进入文件夹'))
             act_open.triggered.connect(lambda: self.open_requested.emit(self._entry.path))
 
         menu.addSeparator()
-        act_rename = menu.addAction("重命名…")
+        act_rename = menu.addAction(tr('重命名…'))
         act_rename.triggered.connect(lambda: self.rename_requested.emit(self._entry.path))
 
-        act_del = menu.addAction("从手机删除…")
+        act_del = menu.addAction(tr('从手机删除…'))
         act_del.triggered.connect(lambda: self.delete_requested.emit(self._entry.path))
 
         menu.exec(global_pos)
@@ -1013,11 +1019,11 @@ class PhoneSourceCard(QFrame):
         header_l.setContentsMargins(0, 0, 0, 0)
         header_l.setSpacing(4)
         header_l.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        eyebrow = QLabel("来源")
+        eyebrow = QLabel(tr('来源'))
         eyebrow.setObjectName("eyebrow")
         eyebrow.setAlignment(Qt.AlignmentFlag.AlignCenter)
         header_l.addWidget(eyebrow)
-        title = QLabel("手机")
+        title = QLabel(tr('手机'))
         title.setObjectName("sectionTitle")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         header_l.addWidget(title)
@@ -1026,7 +1032,7 @@ class PhoneSourceCard(QFrame):
         self.btn_refresh = QToolButton()
         self.btn_refresh.setObjectName("refreshBtn")
         self.btn_refresh.setText(sym("arrow.clockwise"))
-        self.btn_refresh.setToolTip("刷新列表")
+        self.btn_refresh.setToolTip(tr('刷新列表'))
         self.btn_refresh.setFixedSize(28, 28)
         self.btn_refresh.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_refresh.clicked.connect(self.reload_listing)
@@ -1035,7 +1041,7 @@ class PhoneSourceCard(QFrame):
         outer.addWidget(header)
         outer.addSpacing(8)
 
-        lab = QLabel("快捷目录")
+        lab = QLabel(tr('快捷目录'))
         lab.setObjectName("sectionLabel")
         outer.addWidget(lab)
 
@@ -1049,11 +1055,11 @@ class PhoneSourceCard(QFrame):
         self.preset_group.setExclusive(True)
         self.preset_buttons: list[QPushButton] = []
         for i, (label, path) in enumerate(PHONE_QUICK_PRESETS):
-            btn = QPushButton(label)
+            btn = QPushButton(tr(label))
             btn.setObjectName("quickTagBtn")
             btn.setCheckable(True)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.setFixedHeight(24)
+            btn.setMinimumHeight(26)
             btn.setProperty("browse_path", path)
             self.preset_group.addButton(btn, i)
             row = i // 3
@@ -1074,7 +1080,7 @@ class PhoneSourceCard(QFrame):
         self.btn_back.setText(sym("chevron.left"))
         self.btn_back.setFixedSize(26, 26)
         self.btn_back.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_back.setToolTip("返回上一级")
+        self.btn_back.setToolTip(tr('返回上一级'))
         self.btn_back.clicked.connect(self._navigate_up)
         nav_row.addWidget(self.btn_back)
 
@@ -1089,7 +1095,7 @@ class PhoneSourceCard(QFrame):
         self.btn_mkdir.setIconSize(QSize(18, 18))
         self.btn_mkdir.setFixedSize(26, 26)
         self.btn_mkdir.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_mkdir.setToolTip("在当前目录新建文件夹")
+        self.btn_mkdir.setToolTip(tr('在当前目录新建文件夹'))
         self.btn_mkdir.clicked.connect(self._prompt_new_folder)
         nav_row.addWidget(self.btn_mkdir)
 
@@ -1098,7 +1104,7 @@ class PhoneSourceCard(QFrame):
         self.btn_delete.setText(sym("trash"))
         self.btn_delete.setFixedSize(26, 26)
         self.btn_delete.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_delete.setToolTip("删除勾选的项目")
+        self.btn_delete.setToolTip(tr('删除勾选的项目'))
         self.btn_delete.setEnabled(False)
         self.btn_delete.clicked.connect(self._prompt_delete_checked)
         nav_row.addWidget(self.btn_delete)
@@ -1111,15 +1117,15 @@ class PhoneSourceCard(QFrame):
 
         self.search_edit = QLineEdit()
         self.search_edit.setObjectName("filterSearchEdit")
-        self.search_edit.setPlaceholderText("搜索文件… (Esc 清空)")
+        self.search_edit.setPlaceholderText(tr('搜索文件… (Esc 清空)'))
         self.search_edit.setClearButtonEnabled(True)
         self.search_edit.textChanged.connect(self._on_filter_changed)
         filter_row.addWidget(self.search_edit, 1)
 
-        self.btn_category = QPushButton("全部 ▾")
+        self.btn_category = QPushButton(tr('全部 ▾'))
         self.btn_category.setObjectName("filterCategoryBtn")
         self.btn_category.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_category.setFixedWidth(72)
+        self.btn_category.setMinimumWidth(90)
         self.btn_category.clicked.connect(self._popup_category_menu)
         filter_row.addWidget(self.btn_category)
 
@@ -1146,10 +1152,10 @@ class PhoneSourceCard(QFrame):
 
         footer = QHBoxLayout()
         footer.setContentsMargins(0, 8, 0, 0)
-        self.summary = QLabel("勾选需要传输的文件或文件夹")
+        self.summary = QLabel(tr('勾选需要传输的文件或文件夹'))
         self.summary.setObjectName("summaryLabel")
         self.summary.setWordWrap(True)
-        self.btn_clear = QPushButton("清空")
+        self.btn_clear = QPushButton(tr('清空'))
         self.btn_clear.setObjectName("clearBtn")
         self.btn_clear.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_clear.clicked.connect(self.clear_paths)
@@ -1167,7 +1173,7 @@ class PhoneSourceCard(QFrame):
     def _popup_category_menu(self) -> None:
         menu = QMenu(self)
         for cat_id, label in PHONE_CATEGORY_PRESETS:
-            action = menu.addAction(label)
+            action = menu.addAction(tr(label))
             action.setCheckable(True)
             action.setChecked(self._filter_category == cat_id)
             action.triggered.connect(lambda _checked=False, c=cat_id: self._set_category(c))
@@ -1177,8 +1183,8 @@ class PhoneSourceCard(QFrame):
         if self._filter_category == cat_id:
             return
         self._filter_category = cat_id
-        label = dict(PHONE_CATEGORY_PRESETS).get(cat_id, "全部")
-        self.btn_category.setText(f"{label} ▾")
+        label = dict(PHONE_CATEGORY_PRESETS).get(cat_id, tr('全部'))
+        self.btn_category.setText(f"{tr(label)} ▾")
         self.btn_category.setProperty("active", cat_id != "all")
         self.btn_category.style().unpolish(self.btn_category)
         self.btn_category.style().polish(self.btn_category)
@@ -1197,7 +1203,7 @@ class PhoneSourceCard(QFrame):
         self.search_edit.clear()
         self.search_edit.blockSignals(False)
         self._filter_category = "all"
-        self.btn_category.setText("全部 ▾")
+        self.btn_category.setText(tr('全部 ▾'))
         self.btn_category.setProperty("active", False)
         self.btn_category.style().unpolish(self.btn_category)
         self.btn_category.style().polish(self.btn_category)
@@ -1320,7 +1326,7 @@ class PhoneSourceCard(QFrame):
         self.search_edit.clear()
         self.search_edit.blockSignals(False)
         self._filter_category = "all"
-        self.btn_category.setText("全部 ▾")
+        self.btn_category.setText(tr('全部 ▾'))
         self.btn_category.setProperty("active", False)
         self.btn_category.style().unpolish(self.btn_category)
         self.btn_category.style().polish(self.btn_category)
@@ -1341,10 +1347,10 @@ class PhoneSourceCard(QFrame):
         current = remote_dir.rstrip("/")
         for label, path in PHONE_QUICK_PRESETS:
             if current == path.rstrip("/"):
-                return label
+                return tr(label)
         for label, path in DEST_PRESETS:
             if current == path.rstrip("/"):
-                return label
+                return tr(label)
         return posixpath.basename(current) or remote_dir
 
     def _update_nav(self) -> None:
@@ -1352,9 +1358,9 @@ class PhoneSourceCard(QFrame):
         self.btn_back.setEnabled(parent is not None)
         name = self._display_name_for_dir(self._browse_dir)
         if self._files_loading and self._entries:
-            self.path_label.setText(f"{name} · 加载文件中…")
+            self.path_label.setText(tr('{p0} · 加载文件中…', p0=name))
         elif self._files_loading:
-            self.path_label.setText(f"{name} · 加载中…")
+            self.path_label.setText(tr('{p0} · 加载中…', p0=name))
         else:
             self.path_label.setText(name)
         self.path_label.setToolTip(self._browse_dir)
@@ -1425,11 +1431,11 @@ class PhoneSourceCard(QFrame):
         self._op_worker = worker
 
         desc = {
-            "mkdir": "新建文件夹",
-            "rename": "重命名",
-            "delete": f"删除 {len(paths)} 个项目",
+            "mkdir": tr('新建文件夹'),
+            "rename": tr('重命名'),
+            "delete": tr('删除 {p0} 个项目', p0=len(paths)),
         }.get(op_type, op_type)
-        self.operation_started.emit(f"正在{desc}…")
+        self.operation_started.emit(tr('正在{p0}…', p0=desc))
         thread.start()
 
     def _cleanup_op_thread(self) -> None:
@@ -1534,7 +1540,7 @@ class PhoneSourceCard(QFrame):
         self._update_nav()
         self._clear_browse_rows()
         self.browse_scroll.verticalScrollBar().setValue(0)
-        loading = QLabel(f"正在读取 {self._display_name_for_dir(browse_dir)}…")
+        loading = QLabel(tr('正在读取 {p0}…', p0=self._display_name_for_dir(browse_dir)))
         loading.setObjectName("emptyHint")
         loading.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.browse_layout.addWidget(loading)
@@ -1602,7 +1608,7 @@ class PhoneSourceCard(QFrame):
         self._clear_browse_rows()
         self._update_nav()
         self._sync_view()
-        hint = QLabel(message or "读取失败")
+        hint = QLabel(message or tr('读取失败'))
         hint.setObjectName("emptyHint")
         hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         hint.setWordWrap(True)
@@ -1625,9 +1631,9 @@ class PhoneSourceCard(QFrame):
 
         if not entries and not loading_files:
             if self.search_edit.text() or self._filter_category != "all":
-                hint = QLabel("无匹配文件 (按 Esc 重置)")
+                hint = QLabel(tr('无匹配文件 (按 Esc 重置)'))
             else:
-                hint = QLabel("此文件夹为空")
+                hint = QLabel(tr('此文件夹为空'))
             hint.setObjectName("emptyHint")
             hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self.browse_layout.addWidget(hint)
@@ -1662,7 +1668,7 @@ class PhoneSourceCard(QFrame):
             self._selected_index = -1
 
         if loading_files:
-            hint = QLabel("正在加载文件…")
+            hint = QLabel(tr('正在加载文件…'))
             hint.setObjectName("emptyHint")
             hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self.browse_layout.addWidget(hint)
@@ -1677,19 +1683,19 @@ class PhoneSourceCard(QFrame):
             matched = len(self._visible_entries)
             total = len(self._entries)
             if n == 0:
-                self.summary.setText(f"匹配 {matched}/{total} 项 · 未勾选")
+                self.summary.setText(tr('匹配 {p0}/{p1} 项 · 未勾选', p0=matched, p1=total))
             else:
-                self.summary.setText(f"匹配 {matched}/{total} 项 · 已选 {n} 项")
+                self.summary.setText(tr('匹配 {p0}/{p1} 项 · 已选 {p2} 项', p0=matched, p1=total, p2=n))
             return
 
         if n == 0:
-            self.summary.setText("勾选需要传输的文件或文件夹")
+            self.summary.setText(tr('勾选需要传输的文件或文件夹'))
             return
         dirs = sum(1 for p in self._paths if self._path_is_dir.get(p, False))
         files = n - dirs
         parts: list[str] = []
         if files:
-            parts.append(f"{files} 个文件")
+            parts.append(tr('{p0} 个文件', p0=files))
         if dirs:
-            parts.append(f"{dirs} 个文件夹")
-        self.summary.setText(f"已选 {' · '.join(parts)}")
+            parts.append(tr('{p0} 个文件夹', p0=dirs))
+        self.summary.setText(tr('已选 {p0}', p0=' · '.join(parts)))

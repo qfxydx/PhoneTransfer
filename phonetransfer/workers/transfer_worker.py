@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+from phonetransfer.i18n import tr
+
 import posixpath
 import subprocess
 import time
@@ -57,15 +59,14 @@ class TransferWorker(QObject):
             else:
                 total_bytes, total_files = count_pull_totals(self.items)
             tracker = FileProgressTracker(total_bytes, total_files, self.progress.emit)
-            tracker.report("准备中…")
+            tracker.report(tr('准备中…'))
             self.log.emit(
-                f"开始传输 {len(self.items)} 项"
-                f"（共 {total_files} 个文件，{human_size(total_bytes)}）→ {self.dest}"
+                tr('开始传输 {p0} 项（共 {p1} 个文件，{p2}）→ {p3}', p0=len(self.items), p1=total_files, p2=human_size(total_bytes), p3=self.dest)
             )
             serial = get_active_serial()
             if not serial:
                 self.finished.emit(
-                    False, "未选择目标设备，请先在右上角切换到要传输的手机"
+                    False, tr('未选择目标设备，请先在右上角切换到要传输的手机')
                 )
                 return
             st = subprocess.run(
@@ -79,12 +80,12 @@ class TransferWorker(QObject):
                 err = (st.stderr or st.stdout or "").strip()
                 if "more than one" in err.lower():
                     self.finished.emit(
-                        False, "检测到多台设备，请先在右上角选择要传输的手机"
+                        False, tr('检测到多台设备，请先在右上角选择要传输的手机')
                     )
                 else:
                     self.finished.emit(
                         False,
-                        f"设备未就绪（{serial}），请检查 USB 调试是否已授权",
+                        tr('设备未就绪（{p0}），请检查 USB 调试是否已授权', p0=serial),
                     )
                 return
 
@@ -95,7 +96,7 @@ class TransferWorker(QObject):
 
             for i, item in enumerate(self.items, 1):
                 if self._cancelled:
-                    self.finished.emit(False, "传输已取消")
+                    self.finished.emit(False, tr('传输已取消'))
                     return
                 name = posixpath.basename(item.rstrip("/"))
                 self.log.emit(f"[{i}/{len(self.items)}] {name}")
@@ -119,7 +120,7 @@ class TransferWorker(QObject):
                             progress=tracker,
                         )
                 except subprocess.TimeoutExpired:
-                    ok, msg = False, f"超时：{name}"
+                    ok, msg = False, tr('超时：{p0}', p0=name)
                 except Exception as e:
                     ok, msg = False, f"{name}：{e}"
                 if ok:
@@ -127,31 +128,31 @@ class TransferWorker(QObject):
                     if self.direction == "to_phone" and msg:
                         pushed_remotes.append(msg)
                 else:
-                    if msg == "已取消":
-                        self.finished.emit(False, "传输已取消")
+                    if msg == tr('已取消'):
+                        self.finished.emit(False, tr('传输已取消'))
                         return
                     failed.append(msg)
 
             elapsed = time.monotonic() - start
-            self.log.emit(f"耗时 {elapsed:.1f}s")
+            self.log.emit(tr('耗时 {p0:.1f}s', p0=elapsed))
 
             if self.direction == "to_phone" and pushed_remotes:
                 try:
                     refresh_phone_media(pushed_remotes, self.log.emit)
                 except Exception as e:
-                    self.log.emit(f"刷新媒体库时出错：{e}")
+                    self.log.emit(tr('刷新媒体库时出错：{p0}', p0=e))
 
             if failed:
-                summary = f"完成 {ok_count}/{len(self.items)} 项，{len(failed)} 项失败"
+                summary = tr('完成 {p0}/{p1} 项，{p2} 项失败', p0=ok_count, p1=len(self.items), p2=len(failed))
                 self.finished.emit(False, f"{summary}\n{failed[0]}")
                 return
 
             if len(self.items) == 1:
-                self.finished.emit(True, "已发送 1 个文件")
+                self.finished.emit(True, tr('已发送 1 个文件'))
             else:
-                self.finished.emit(True, f"已发送 {len(self.items)} 个文件")
+                self.finished.emit(True, tr('已发送 {p0} 个文件', p0=len(self.items)))
         except subprocess.TimeoutExpired:
-            self.finished.emit(False, "操作超时")
+            self.finished.emit(False, tr('操作超时'))
         except Exception as e:
             self.finished.emit(False, str(e))
         finally:

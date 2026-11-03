@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from phonetransfer.i18n import tr
+
 from pathlib import Path
 import os
 import shutil
@@ -78,23 +80,23 @@ class RemotePreviewWorker(QThread):
             cache.parent.mkdir(parents=True, exist_ok=True)
             available = shutil.disk_usage(cache.parent).free
             if expected_size > max(0, available - 32 * 1024 * 1024):
-                raise RuntimeError("Mac 可用磁盘空间不足，无法缓存文件预览")
+                raise RuntimeError(tr('Mac 可用磁盘空间不足，无法缓存文件预览'))
 
             cmd = adb_cmd("pull", self._remote_path, str(temp), serial=self._serial)
             try:
                 res = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
             except subprocess.TimeoutExpired as exc:
                 raise RuntimeError(
-                    "手机文件预览下载超时，建议先将大型视频传输到 Mac 后打开"
+                    tr('手机文件预览下载超时，建议先将大型视频传输到 Mac 后打开')
                 ) from exc
             if res.returncode != 0:
                 raise RuntimeError(
-                    (res.stderr or res.stdout or "拉取失败").strip()
+                    (res.stderr or res.stdout or tr('拉取失败')).strip()
                 )
             if not temp.is_file() or temp.stat().st_size != expected_size:
-                raise RuntimeError("预览文件大小校验失败，未使用不完整缓存")
+                raise RuntimeError(tr('预览文件大小校验失败，未使用不完整缓存'))
             if signature and self._remote_signature() != signature:
-                raise RuntimeError("预览过程中手机文件发生变化，请重新打开")
+                raise RuntimeError(tr('预览过程中手机文件发生变化，请重新打开'))
 
             os.replace(temp, cache)
             if fingerprint:

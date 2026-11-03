@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+from phonetransfer.i18n import tr
+
 from typing import Literal
 from PySide6.QtCore import QObject, Signal
 
@@ -35,7 +37,7 @@ class RemoteOpWorker(QObject):
             if self.op_type == "mkdir":
                 target = self.paths[0] if self.paths else ""
                 ok, err = remote_mkdir(target)
-                msg = f"已新建文件夹「{target}」" if ok else (err or "创建文件夹失败")
+                msg = tr('已新建文件夹「{p0}」', p0=target) if ok else (err or tr('创建文件夹失败'))
                 if not self._cancelled:
                     self.finished.emit(ok, msg, self.op_type, self.paths)
 
@@ -43,24 +45,24 @@ class RemoteOpWorker(QObject):
                 old_p = self.paths[0] if len(self.paths) > 0 else ""
                 new_p = self.paths[1] if len(self.paths) > 1 else ""
                 ok, err = remote_rename(old_p, new_p)
-                msg = "重命名成功" if ok else (err or "重命名失败")
+                msg = tr('重命名成功') if ok else (err or tr('重命名失败'))
                 if not self._cancelled:
                     self.finished.emit(ok, msg, self.op_type, self.paths)
 
             elif self.op_type == "delete":
                 ok, err = remote_delete(self.paths)
                 n = len(self.paths)
-                msg = f"已从手机删除 {n} 个项目" if ok else (err or "删除失败")
+                msg = tr('已从手机删除 {p0} 个项目', p0=n) if ok else (err or tr('删除失败'))
                 if not self._cancelled:
                     self.finished.emit(ok, msg, self.op_type, self.paths)
 
             else:
                 if not self._cancelled:
-                    self.finished.emit(False, f"未知的操作类型: {self.op_type}", self.op_type, self.paths)
+                    self.finished.emit(False, tr('未知的操作类型: {p0}', p0=self.op_type), self.op_type, self.paths)
 
         except Exception as e:
             if not self._cancelled:
-                self.finished.emit(False, f"操作异常: {e}", self.op_type, self.paths)
+                self.finished.emit(False, tr('操作异常: {p0}', p0=e), self.op_type, self.paths)
         finally:
             reclaim_qobject_to_main(self)
 

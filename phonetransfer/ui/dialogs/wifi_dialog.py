@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from phonetransfer.i18n import tr
+
 from typing import Literal
 
 from PySide6.QtCore import QTimer
@@ -32,9 +34,9 @@ class WifiConnectDialog(QDialog):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("添加无线设备")
+        self.setWindowTitle(tr('添加无线设备'))
         self.setModal(True)
-        self.setFixedWidth(430)
+        self.setMinimumWidth(430)
         self._worker: WifiActionWorker | None = None
         self._build_ui()
 
@@ -53,25 +55,21 @@ class WifiConnectDialog(QDialog):
         ul.setSpacing(10)
 
         usb_hint = QLabel(
-            "经典 TCP ADB 模式（端口 5555），仅限可信私有网络。\n"
-            "手机端的 TCP 调试可能在拔掉 USB 后继续监听；"
-            "建议优先使用 Android 11+ 的配对码无线调试。\n"
-            "使用完毕后必须选择关闭经典无线调试，"
-            "单纯断开电脑连接并不能关闭手机监听端口。"
+            tr('经典 TCP ADB 模式（端口 5555），仅限可信私有网络。\n手机端的 TCP 调试可能在拔掉 USB 后继续监听；建议优先使用 Android 11+ 的配对码无线调试。\n使用完毕后必须选择关闭经典无线调试，单纯断开电脑连接并不能关闭手机监听端口。')
         )
         usb_hint.setWordWrap(True)
         usb_hint.setStyleSheet("color: gray; font-size: 12px;")
         ul.addWidget(usb_hint)
 
-        self.btn_usb_to_wifi = QPushButton("⚡ 插线一键开启无线并连接")
+        self.btn_usb_to_wifi = QPushButton(tr('⚡ 插线一键开启无线并连接'))
         self.btn_usb_to_wifi.clicked.connect(self._do_usb_to_wifi)
         ul.addWidget(self.btn_usb_to_wifi)
 
-        self.btn_disable_tcpip = QPushButton("关闭已选设备的经典无线调试（5555）")
+        self.btn_disable_tcpip = QPushButton(tr('关闭已选设备的经典无线调试（5555）'))
         selected = get_active_serial() or ""
         self.btn_disable_tcpip.setEnabled(WifiActionWorker._classic_wifi_target(selected))
         if not self.btn_disable_tcpip.isEnabled():
-            self.btn_disable_tcpip.setToolTip("先在主界面选择已连接的 IP:5555 无线设备")
+            self.btn_disable_tcpip.setToolTip(tr('先在主界面选择已连接的 IP:5555 无线设备'))
         self.btn_disable_tcpip.clicked.connect(self._do_disable_tcpip)
         ul.addWidget(self.btn_disable_tcpip)
 
@@ -80,7 +78,7 @@ class WifiConnectDialog(QDialog):
         ul.addWidget(self.usb_to_wifi_result)
         ul.addStretch(1)
 
-        self.tabs.addTab(self.usb_tab, "插线转无线 (免配对)")
+        self.tabs.addTab(self.usb_tab, tr('插线转无线 (免配对)'))
 
         # ── Tab 2: 配对码（Android 11+）─────────────────────────────────────
         self.pair_tab = QWidget()
@@ -89,9 +87,7 @@ class WifiConnectDialog(QDialog):
         pl.setSpacing(10)
 
         pair_hint = QLabel(
-            "Android 11+：开发者选项 → 无线调试 → 使用配对码配对，\n"
-            "输入该界面显示的 IP、配对端口（3xxxx）和 6 位配对码。\n"
-            "配对成功后设备会自动出现在主界面设备列表中。"
+            tr('Android 11+：开发者选项 → 无线调试 → 使用配对码配对，\n输入该界面显示的 IP、配对端口（3xxxx）和 6 位配对码。\n配对成功后设备会自动出现在主界面设备列表中。')
         )
         pair_hint.setWordWrap(True)
         pair_hint.setStyleSheet("color: gray; font-size: 12px;")
@@ -101,18 +97,18 @@ class WifiConnectDialog(QDialog):
         form2.setSpacing(8)
         self.pair_ip = QLineEdit()
         self.pair_ip.setPlaceholderText("192.168.1.100")
-        form2.addRow("IP 地址：", self.pair_ip)
+        form2.addRow(tr('IP 地址：'), self.pair_ip)
         self.pair_port = QSpinBox()
         self.pair_port.setRange(1, 65535)
         self.pair_port.setValue(37000)
-        form2.addRow("配对端口：", self.pair_port)
+        form2.addRow(tr('配对端口：'), self.pair_port)
         self.pair_code = QLineEdit()
         self.pair_code.setPlaceholderText("123456")
         self.pair_code.setMaxLength(6)
-        form2.addRow("配对码：", self.pair_code)
+        form2.addRow(tr('配对码：'), self.pair_code)
         pl.addLayout(form2)
 
-        self.btn_pair = QPushButton("配对")
+        self.btn_pair = QPushButton(tr('配对'))
         self.btn_pair.clicked.connect(self._do_pair)
         pl.addWidget(self.btn_pair)
 
@@ -121,7 +117,7 @@ class WifiConnectDialog(QDialog):
         pl.addWidget(self.pair_result)
         pl.addStretch(1)
 
-        self.tabs.addTab(self.pair_tab, "配对码 (Android 11+)")
+        self.tabs.addTab(self.pair_tab, tr('配对码 (Android 11+)'))
 
         # ── Tab 3: 手动输入 ──────────────────────────────────────────────────
         self.manual_tab = QWidget()
@@ -129,7 +125,7 @@ class WifiConnectDialog(QDialog):
         ml.setContentsMargins(12, 12, 12, 12)
         ml.setSpacing(10)
 
-        tip = QLabel("在手机「开发者选项 → 无线调试」中可以看到 IP 地址和端口。")
+        tip = QLabel(tr('在手机「开发者选项 → 无线调试」中可以看到 IP 地址和端口。'))
         tip.setWordWrap(True)
         tip.setStyleSheet("color: gray; font-size: 12px;")
         ml.addWidget(tip)
@@ -138,14 +134,14 @@ class WifiConnectDialog(QDialog):
         form1.setSpacing(8)
         self.manual_ip = QLineEdit()
         self.manual_ip.setPlaceholderText("192.168.1.100")
-        form1.addRow("IP 地址：", self.manual_ip)
+        form1.addRow(tr('IP 地址：'), self.manual_ip)
         self.manual_port = QSpinBox()
         self.manual_port.setRange(1, 65535)
         self.manual_port.setValue(5555)
-        form1.addRow("端口：", self.manual_port)
+        form1.addRow(tr('端口：'), self.manual_port)
         ml.addLayout(form1)
 
-        self.btn_manual_connect = QPushButton("连接")
+        self.btn_manual_connect = QPushButton(tr('连接'))
         self.btn_manual_connect.clicked.connect(self._manual_connect)
         ml.addWidget(self.btn_manual_connect)
 
@@ -154,13 +150,13 @@ class WifiConnectDialog(QDialog):
         ml.addWidget(self.manual_result)
         ml.addStretch(1)
 
-        self.tabs.addTab(self.manual_tab, "手动输入")
+        self.tabs.addTab(self.manual_tab, tr('手动输入'))
 
         # 默认选中第一项（插线转无线）
         self.tabs.setCurrentIndex(0)
 
         # ── 关闭按钮 ─────────────────────────────────────────────────────────
-        self.btn_close = QPushButton("关闭")
+        self.btn_close = QPushButton(tr('关闭'))
         self.btn_close.clicked.connect(self.reject)
         layout.addWidget(self.btn_close)
 
@@ -210,17 +206,17 @@ class WifiConnectDialog(QDialog):
             if action == "connect":
                 QTimer.singleShot(600, self.accept)
             elif action == "usb_to_wifi":
-                QMessageBox.information(self, "无线连接成功", msg)
+                QMessageBox.information(self, tr('无线连接成功'), msg)
                 self.accept()
             elif action == "disable_tcpip":
-                QMessageBox.information(self, "经典无线调试已关闭", msg)
+                QMessageBox.information(self, tr('经典无线调试已关闭'), msg)
                 self.accept()
 
     def _manual_connect(self) -> None:
         ip = self.manual_ip.text().strip()
         port = self.manual_port.value()
         if not ip:
-            self.manual_result.setText("❌ 请输入 IP 地址")
+            self.manual_result.setText(tr('❌ 请输入 IP 地址'))
             return
         self._start_worker("connect", {"ip": ip, "port": port})
 
@@ -229,20 +225,17 @@ class WifiConnectDialog(QDialog):
         port = self.pair_port.value()
         code = self.pair_code.text().strip()
         if not ip:
-            self.pair_result.setText("❌ 请输入 IP 地址")
+            self.pair_result.setText(tr('❌ 请输入 IP 地址'))
             return
         if not code:
-            self.pair_result.setText("❌ 请输入配对码")
+            self.pair_result.setText(tr('❌ 请输入配对码'))
             return
         self._start_worker("pair", {"ip": ip, "port": port, "code": code})
 
     def _do_usb_to_wifi(self) -> None:
         confirm = QMessageBox.warning(
-            self, "启用经典无线调试",
-            "这会在手机上开启经典 TCP ADB 5555 监听端口。"
-            "拔线或关闭 PhoneTransfer 不一定会关闭该端口。\n\n"
-            "请仅在你信任的私人 Wi-Fi 上使用，结束后明确关闭经典无线调试。"
-            "建议优先使用 Android 11+ 的配对码模式。\n\n确定要开启吗？",
+            self, tr('启用经典无线调试'),
+            tr('这会在手机上开启经典 TCP ADB 5555 监听端口。拔线或关闭 PhoneTransfer 不一定会关闭该端口。\n\n请仅在你信任的私人 Wi-Fi 上使用，结束后明确关闭经典无线调试。建议优先使用 Android 11+ 的配对码模式。\n\n确定要开启吗？'),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -255,7 +248,7 @@ class WifiConnectDialog(QDialog):
     def _do_disable_tcpip(self) -> None:
         serial = get_active_serial() or ""
         if not WifiActionWorker._classic_wifi_target(serial):
-            self.usb_to_wifi_result.setText("请先在主界面选择 IP:5555 设备")
+            self.usb_to_wifi_result.setText(tr('请先在主界面选择 IP:5555 设备'))
             return
         self._start_worker("disable_tcpip", {"serial": serial})
 

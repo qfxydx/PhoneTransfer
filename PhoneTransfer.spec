@@ -2,14 +2,25 @@
 
 import os
 import sys
+from pathlib import Path
+from PySide6.QtCore import QLibraryInfo
 
 block_cipher = None
 
 added_files = [
     ('phonetransfer/assets', 'phonetransfer/assets'),
+    ('phonetransfer/locales', 'phonetransfer/locales'),
     ('bin', 'bin'),
     ('AppIcon.icns', '.'),
 ]
+
+# Package the Qt-owned file-dialog/context-menu translations explicitly as well.
+qt_translations = Path(QLibraryInfo.path(QLibraryInfo.LibraryPath.TranslationsPath))
+for locale in ('zh_CN', 'en', 'ja', 'ko', 'de', 'es'):
+    resource = qt_translations / f'qtbase_{locale}.qm'
+    if not resource.is_file():
+        raise FileNotFoundError(f'Missing required Qt translation: {resource}')
+    added_files.append((str(resource), 'PySide6/Qt/translations'))
 
 a = Analysis(
     ['phone_transfer.py'],
@@ -76,8 +87,8 @@ app = BUNDLE(
         'CFBundlePackageType': 'APPL',
         'CFBundleSignature': '????',
         'CFBundleIdentifier': 'local.phonetransfer.app',
-        'CFBundleVersion': '1.0.2',
-        'CFBundleShortVersionString': '1.0.2',
+        'CFBundleVersion': '1.1.0',
+        'CFBundleShortVersionString': '1.1.0',
         'NSHumanReadableCopyright': 'Copyright © 2026 qfxydx. All rights reserved.',
         'NSHighResolutionCapable': True,
         'NSSupportsAutomaticGraphicsSwitching': True,

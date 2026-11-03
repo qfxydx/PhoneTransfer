@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+from phonetransfer.i18n import tr
+
 import os
 import subprocess
 import sys
@@ -144,6 +146,34 @@ def make_mac_screen_icon(
     return icon
 
 
+def make_mac_globe_icon(
+    normal: str = "#86868b", hover: str = "#007aff", disabled: str = "#555558", size: int = 18
+) -> QIcon:
+    """Render a monochrome outline globe with explicit toolbar state colors."""
+    from PySide6.QtCore import QByteArray, Qt
+    from PySide6.QtGui import QPainter, QPixmap
+    from PySide6.QtSvg import QSvgRenderer
+
+    svg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+      fill="none" stroke="{color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9"/>
+      <ellipse cx="12" cy="12" rx="4" ry="9"/>
+      <path d="M3 12h18M5 6.5h14M5 17.5h14"/>
+    </svg>"""
+    icon = QIcon()
+    for color, mode in ((normal, QIcon.Mode.Normal), (hover, QIcon.Mode.Active),
+                        (disabled, QIcon.Mode.Disabled)):
+        renderer = QSvgRenderer(QByteArray(svg.format(color=color).encode("utf-8")))
+        pixmap = QPixmap(size * 2, size * 2)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap)
+        renderer.render(painter)
+        painter.end()
+        pixmap.setDevicePixelRatio(2)
+        icon.addPixmap(pixmap, mode)
+    return icon
+
+
 def sym(name: str) -> str:
     mapping = {
         "arrow.clockwise": "\u21bb",
@@ -237,7 +267,7 @@ def _run_picker_process(executable: str, args: list[str]) -> tuple[int, str, str
     process.errorOccurred.connect(lambda _error: loop.quit())
     process.start(executable, args)
     if not process.waitForStarted(5000):
-        error = process.errorString() or "文件选择器无法启动"
+        error = process.errorString() or tr('文件选择器无法启动')
         return 1, "", error
 
     # On fast exits, waitForStarted may return after finished was emitted.
@@ -252,19 +282,18 @@ def _run_picker_process(executable: str, args: list[str]) -> tuple[int, str, str
     return code, stdout, stderr
 
 
-def pick_files_and_folders(title: str = "选择要传输的内容") -> list[str]:
+def pick_files_and_folders(title: str | None = None) -> list[str]:
+    if title is None:
+        title = tr('选择要传输的内容')
     if sys.platform == "darwin":
         helper = picker_helper_path()
         if helper is None:
             raise RuntimeError(
-                "Mac 文件选择器组件缺失或无法执行。"
-                "请重新安装应用，或在源码目录运行 "
-                "swiftc -O -o bin/pick_items pick_items.swift；"
-                "也可以直接将文件拖入 PhoneTransfer。"
+                tr('Mac 文件选择器组件缺失或无法执行。请重新安装应用，或在源码目录运行 swiftc -O -o bin/pick_items pick_items.swift；也可以直接将文件拖入 PhoneTransfer。')
             )
         code, stdout, stderr = _run_picker_process(str(helper), [title])
         if code != 0:
-            raise RuntimeError(f"Mac 文件选择器打开失败：{stderr.strip() or '未知错误'}")
+            raise RuntimeError(tr('Mac 文件选择器打开失败：{p0}', p0=stderr.strip() or tr('未知错误')))
         # Empty output is a normal Cancel; never launch a second Qt dialog.
         return [line for line in stdout.splitlines() if line]
 

@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+from phonetransfer.i18n import tr
+
 import posixpath
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -21,30 +23,31 @@ class NewFolderDialog(QDialog):
 
     def __init__(self, parent=None, current_dir_name: str = "") -> None:
         super().__init__(parent)
-        self.setWindowTitle("新建文件夹")
+        self.setWindowTitle(tr('新建文件夹'))
         self.setModal(True)
-        self.setFixedWidth(340)
+        self.setMinimumWidth(340)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(14)
 
-        title = QLabel("新建文件夹")
+        title = QLabel(tr('新建文件夹'))
         title.setStyleSheet("font-size: 15px; font-weight: 600;")
         layout.addWidget(title)
 
-        hint = QLabel(f"在「{current_dir_name or '当前目录'}」中创建新文件夹：")
+        hint = QLabel(tr('在「{p0}」中创建新文件夹：', p0=current_dir_name or tr('当前目录')))
         hint.setWordWrap(True)
         hint.setStyleSheet("font-size: 12px; color: #8e8e93;")
         layout.addWidget(hint)
 
-        self.edit = QLineEdit("新建文件夹")
+        self.edit = QLineEdit(tr('新建文件夹'))
         self.edit.setObjectName("pathEdit")
         self.edit.selectAll()
         self.edit.returnPressed.connect(self._on_accept)
         layout.addWidget(self.edit)
 
         self.err_label = QLabel("")
+        self.err_label.setWordWrap(True)
         self.err_label.setStyleSheet("color: #e8685a; font-size: 11px;")
         self.err_label.setVisible(False)
         layout.addWidget(self.err_label)
@@ -53,13 +56,13 @@ class NewFolderDialog(QDialog):
         btn_row.setSpacing(10)
         btn_row.addStretch(1)
 
-        btn_cancel = QPushButton("取消")
+        btn_cancel = QPushButton(tr('取消'))
         btn_cancel.setObjectName("segmentBtn")
         btn_cancel.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_cancel.clicked.connect(self.reject)
         btn_row.addWidget(btn_cancel)
 
-        btn_ok = QPushButton("创建")
+        btn_ok = QPushButton(tr('创建'))
         btn_ok.setObjectName("pickBtn")
         btn_ok.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_ok.clicked.connect(self._on_accept)
@@ -70,11 +73,11 @@ class NewFolderDialog(QDialog):
     def _on_accept(self) -> None:
         name = self.edit.text().strip()
         if not name:
-            self.err_label.setText("文件夹名称不能为空")
+            self.err_label.setText(tr('文件夹名称不能为空'))
             self.err_label.setVisible(True)
             return
         if any(c in name for c in ("\0", ":", "*", "?", '"', "<", ">", "|", "\\", "/")):
-            self.err_label.setText("文件夹名称不能包含 / : * ? \" < > | 等特殊字符")
+            self.err_label.setText(tr('文件夹名称不能包含 / : * ? " < > | 等特殊字符'))
             self.err_label.setVisible(True)
             return
         self.accept()
@@ -88,20 +91,20 @@ class RenameDialog(QDialog):
 
     def __init__(self, parent=None, current_name: str = "") -> None:
         super().__init__(parent)
-        self.setWindowTitle("重命名")
+        self.setWindowTitle(tr('重命名'))
         self.setModal(True)
-        self.setFixedWidth(340)
+        self.setMinimumWidth(340)
         self._original_name = current_name
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(14)
 
-        title = QLabel("重命名")
+        title = QLabel(tr('重命名'))
         title.setStyleSheet("font-size: 15px; font-weight: 600;")
         layout.addWidget(title)
 
-        hint = QLabel(f"原名称：{current_name}")
+        hint = QLabel(tr('原名称：{p0}', p0=current_name))
         hint.setWordWrap(True)
         hint.setStyleSheet("font-size: 12px; color: #8e8e93;")
         layout.addWidget(hint)
@@ -118,6 +121,7 @@ class RenameDialog(QDialog):
         layout.addWidget(self.edit)
 
         self.err_label = QLabel("")
+        self.err_label.setWordWrap(True)
         self.err_label.setStyleSheet("color: #e8685a; font-size: 11px;")
         self.err_label.setVisible(False)
         layout.addWidget(self.err_label)
@@ -126,13 +130,13 @@ class RenameDialog(QDialog):
         btn_row.setSpacing(10)
         btn_row.addStretch(1)
 
-        btn_cancel = QPushButton("取消")
+        btn_cancel = QPushButton(tr('取消'))
         btn_cancel.setObjectName("segmentBtn")
         btn_cancel.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_cancel.clicked.connect(self.reject)
         btn_row.addWidget(btn_cancel)
 
-        btn_ok = QPushButton("确定")
+        btn_ok = QPushButton(tr('确定'))
         btn_ok.setObjectName("pickBtn")
         btn_ok.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_ok.clicked.connect(self._on_accept)
@@ -143,14 +147,14 @@ class RenameDialog(QDialog):
     def _on_accept(self) -> None:
         name = self.edit.text().strip()
         if not name:
-            self.err_label.setText("名称不能为空")
+            self.err_label.setText(tr('名称不能为空'))
             self.err_label.setVisible(True)
             return
         if name == self._original_name:
             self.reject()
             return
         if any(c in name for c in ("\0", ":", "*", "?", '"', "<", ">", "|", "\\", "/")):
-            self.err_label.setText("名称不能包含 / : * ? \" < > | 等特殊字符")
+            self.err_label.setText(tr('名称不能包含 / : * ? " < > | 等特殊字符'))
             self.err_label.setVisible(True)
             return
         self.accept()
@@ -164,31 +168,31 @@ class DeleteConfirmDialog(QDialog):
 
     def __init__(self, parent=None, count: int = 1, sample_name: str = "") -> None:
         super().__init__(parent)
-        self.setWindowTitle("删除确认")
+        self.setWindowTitle(tr('删除确认'))
         self.setModal(True)
-        self.setFixedWidth(360)
+        self.setMinimumWidth(360)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(14)
 
-        title = QLabel("永久删除")
+        title = QLabel(tr('永久删除'))
         title.setStyleSheet("font-size: 15px; font-weight: 600; color: #e8685a;")
         layout.addWidget(title)
 
         if count == 1:
-            main_text = f"确定要从手机中永久删除「{sample_name}」吗？"
+            main_text = tr('确定要从手机中永久删除「{p0}」吗？', p0=sample_name)
         else:
-            main_text = f"确定要从手机中永久删除选中的 {count} 个项目吗？"
+            main_text = tr('确定要从手机中永久删除选中的 {p0} 个项目吗？', p0=count)
             if sample_name:
-                main_text += f"\n包含：{sample_name} 等"
+                main_text += tr('\n包含：{p0} 等', p0=sample_name)
 
         lab_main = QLabel(main_text)
         lab_main.setWordWrap(True)
         lab_main.setStyleSheet("font-size: 13px; line-height: 1.4;")
         layout.addWidget(lab_main)
 
-        hint = QLabel("⚠️ 此操作将从手机内部存储中彻底移除，无法撤销。")
+        hint = QLabel(tr('⚠️ 此操作将从手机内部存储中彻底移除，无法撤销。'))
         hint.setWordWrap(True)
         hint.setStyleSheet("font-size: 11px; color: #8e8e93;")
         layout.addWidget(hint)
@@ -197,14 +201,14 @@ class DeleteConfirmDialog(QDialog):
         btn_row.setSpacing(10)
         btn_row.addStretch(1)
 
-        btn_cancel = QPushButton("取消")
+        btn_cancel = QPushButton(tr('取消'))
         btn_cancel.setObjectName("segmentBtn")
         btn_cancel.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_cancel.setDefault(True)
         btn_cancel.clicked.connect(self.reject)
         btn_row.addWidget(btn_cancel)
 
-        btn_del = QPushButton("删除")
+        btn_del = QPushButton(tr('删除'))
         btn_del.setObjectName("dangerBtn")
         btn_del.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_del.clicked.connect(self.accept)

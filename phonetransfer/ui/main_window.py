@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from phonetransfer.i18n import tr, saved_selection, save_selection, LANGUAGE_NAMES
+
 from pathlib import Path
 import subprocess
 import time
@@ -9,6 +11,8 @@ from typing import Literal
 
 from PySide6.QtCore import QMetaObject, QSize, Qt, QThread, QTimer
 from PySide6.QtGui import (
+    QAction,
+    QActionGroup,
     QCloseEvent,
     QGuiApplication,
     QKeySequence,
@@ -80,6 +84,7 @@ from phonetransfer.ui.dialogs import (
     WifiConnectDialog,
 )
 from phonetransfer.ui.quicklook import QuickLookManager
+from phonetransfer.ui.widgets.log_list import ParsedLogEntry, parse_log_line
 from phonetransfer.ui.theme import AppTheme
 from phonetransfer.ui.widgets import (
     DestinationCard,
@@ -93,6 +98,7 @@ from phonetransfer.ui.widgets import (
 from phonetransfer.utils import (
     human_size,
     make_mac_coffee_icon,
+    make_mac_globe_icon,
     make_mac_screen_icon,
     pick_files_and_folders,
     resolve_symbol_font,
@@ -113,7 +119,6 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Phone Transfer")
         self.resize(WINDOW_WIDTH, 680)
         self.setMinimumSize(WINDOW_WIDTH, 660)
-        self.setMaximumWidth(WINDOW_WIDTH)
 
         self._symbol_font = resolve_symbol_font()
         self._busy = False
@@ -132,6 +137,7 @@ class MainWindow(QMainWindow):
         self._transfer_worker: TransferWorker | None = None
         self._transfer_started_at = 0.0
         self._log_lines: list[str] = []
+        self._log_entries: list[ParsedLogEntry] = []
         self._known_device_serial: str | None = None
         self._pending_device_manual = False
         self._connect_hint_key: str | None = None
@@ -174,7 +180,7 @@ class MainWindow(QMainWindow):
         self._build_ui()
         self._apply_theme()
         self._update_transfer_button()
-        self.append_log(f"引擎就绪 · {ADB}")
+        self.append_log(tr('引擎就绪 · {p0}', p0=ADB))
         self.refresh_device(manual=True)
         self._device_poll_timer.start()
 
@@ -192,6 +198,24 @@ class MainWindow(QMainWindow):
         app = QApplication.instance()
         if app is not None:
             app.paletteChanged.connect(self._apply_theme)
+
+    def _sync_language_menu(self) -> None:
+        for action in self.language_menu.actions():
+            action.setChecked(action.data() == self._language_selection)
+
+    def _language_selected(self, action: QAction) -> None:
+        selection = action.data()
+        if selection == self._language_selection:
+            return
+        try:
+            save_selection(selection)
+        except OSError:
+            self._sync_language_menu()
+            QMessageBox.warning(self, tr("界面语言"), tr("无法保存语言设置，请检查系统偏好设置权限。"))
+            return
+        self._language_selection = selection
+        self._sync_language_menu()
+        QMessageBox.information(self, tr("界面语言"), tr("语言设置已保存。请在当前操作完成后退出并重新打开 PhoneTransfer，所有界面将使用新语言。"))
 
     def _build_ui(self) -> None:
         central = QWidget()
@@ -213,7 +237,7 @@ class MainWindow(QMainWindow):
         self.btn_send_text = QToolButton()
         self.btn_send_text.setObjectName("sendTextBtn")
         self.btn_send_text.setText(sym("paperplane"))
-        self.btn_send_text.setToolTip("发送到手机剪贴板 (⌘⇧V)")
+        self.btn_send_text.setToolTip(tr('发送到手机剪贴板 (⌘⇧V)'))
         self.btn_send_text.setFixedSize(26, 26)
         self.btn_send_text.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_send_text.clicked.connect(self._open_quick_text_dialog)
@@ -222,7 +246,7 @@ class MainWindow(QMainWindow):
         self.btn_scrcpy.setObjectName("scrcpyBtn")
         self.btn_scrcpy.setIcon(make_mac_screen_icon())
         self.btn_scrcpy.setIconSize(QSize(18, 18))
-        self.btn_scrcpy.setToolTip("手机投屏 (⌘⇧M)")
+        self.btn_scrcpy.setToolTip(tr('手机投屏 (⌘⇧M)'))
         self.btn_scrcpy.setFixedSize(26, 26)
         self.btn_scrcpy.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_scrcpy.clicked.connect(self._launch_scrcpy)
@@ -230,7 +254,7 @@ class MainWindow(QMainWindow):
         self.btn_wifi = QToolButton()
         self.btn_wifi.setObjectName("wifiBtn")
         self.btn_wifi.setText("≋")
-        self.btn_wifi.setToolTip("添加无线设备")
+        self.btn_wifi.setToolTip(tr('添加无线设备'))
         self.btn_wifi.setFixedSize(26, 26)
         self.btn_wifi.setCursor(Qt.CursorShape.PointingHandCursor)
 
@@ -238,7 +262,7 @@ class MainWindow(QMainWindow):
         self.btn_coffee.setObjectName("coffeeBtn")
         self.btn_coffee.setIcon(make_mac_coffee_icon())
         self.btn_coffee.setIconSize(QSize(18, 18))
-        self.btn_coffee.setToolTip("请作者喝杯咖啡 (Buy Me a Coffee)")
+        self.btn_coffee.setToolTip(tr('请作者喝杯咖啡 (Buy Me a Coffee)'))
         self.btn_coffee.setFixedSize(26, 26)
         self.btn_coffee.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_coffee.clicked.connect(self._open_sponsor_dialog)
@@ -247,6 +271,36 @@ class MainWindow(QMainWindow):
         ts.addWidget(self.btn_scrcpy)
         ts.addWidget(self.btn_wifi)
         ts.addWidget(self.btn_coffee)
+
+        self.language_button = QToolButton()
+        self.language_button.setObjectName("languageButton")
+        self.language_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        self.language_button.setIconSize(QSize(18, 18))
+        self.language_button.setFixedSize(26, 26)
+        self.language_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.language_button.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.language_button.setAccessibleName(tr("界面语言"))
+        self.language_button.setAccessibleDescription(tr("语言设置在重新启动后生效。"))
+        self.language_button.setToolTip(tr("界面语言") + "\n" + tr("语言设置在重新启动后生效。"))
+        self._language_selection = saved_selection()
+        self.language_menu = QMenu(self.language_button)
+        self.language_menu.setObjectName("languageMenu")
+        self.language_menu.setAccessibleName(tr("界面语言"))
+        self.language_actions = QActionGroup(self.language_menu)
+        self.language_actions.setExclusive(True)
+        auto_action = self.language_menu.addAction(tr("系统 / 自动"))
+        auto_action.setData("auto")
+        for code, name in LANGUAGE_NAMES.items():
+            action = self.language_menu.addAction(name)
+            action.setData(code)
+        for action in self.language_menu.actions():
+            action.setCheckable(True)
+            self.language_actions.addAction(action)
+        self._sync_language_menu()
+        self.language_menu.aboutToShow.connect(self._sync_language_menu)
+        self.language_actions.triggered.connect(self._language_selected)
+        self.language_button.setMenu(self.language_menu)
+        self.language_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
 
         # —— 中间弹性空白，将功能区与设备状态区分开 ——
         ts.addStretch(1)
@@ -259,13 +313,13 @@ class MainWindow(QMainWindow):
 
         self.device_name = QToolButton()
         self.device_name.setObjectName("devicePickerBtn")
-        self.device_name.setText("未连接")
+        self.device_name.setText(tr('未连接'))
         self.device_name.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
         self.device_name.setCursor(Qt.CursorShape.ArrowCursor)
         self.device_name.setPopupMode(QToolButton.ToolButtonPopupMode.DelayedPopup)
         self.device_name.setAutoRaise(True)
         self.device_name.setEnabled(False)
-        self.device_name.setToolTip("连接设备后可在此切换")
+        self.device_name.setToolTip(tr('连接设备后可在此切换'))
         self.device_name.clicked.connect(self._popup_device_menu)
 
         self.device_chevron = QToolButton()
@@ -273,7 +327,7 @@ class MainWindow(QMainWindow):
         self.device_chevron.setText(sym("chevron.down"))
         self.device_chevron.setVisible(False)
         self.device_chevron.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.device_chevron.setToolTip("点击切换设备")
+        self.device_chevron.setToolTip(tr('点击切换设备'))
         self.device_chevron.setAutoRaise(True)
         self.device_chevron.clicked.connect(self._popup_device_menu)
 
@@ -284,14 +338,14 @@ class MainWindow(QMainWindow):
         self.status_dot.setObjectName("statusDotOffline")
         self.status_dot.setFixedSize(8, 8)
 
-        self.status_connected = QLabel("已连接")
+        self.status_connected = QLabel(tr('已连接'))
         self.status_connected.setObjectName("statusConnected")
         self.status_connected.setVisible(False)
 
         self.btn_refresh = QToolButton()
         self.btn_refresh.setObjectName("refreshBtn")
         self.btn_refresh.setText(sym("arrow.clockwise"))
-        self.btn_refresh.setToolTip("刷新设备")
+        self.btn_refresh.setToolTip(tr('刷新设备'))
         self.btn_refresh.setFixedSize(26, 26)
         self.btn_refresh.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_refresh.clicked.connect(lambda: self.refresh_device(manual=True))
@@ -300,6 +354,7 @@ class MainWindow(QMainWindow):
         ts.addWidget(self.status_dot)
         ts.addWidget(self.status_connected)
         ts.addWidget(self.btn_refresh)
+        ts.addWidget(self.language_button)
         root.addWidget(title_strip)
 
         # —— 主内容区（双卡固定宽度 + 下方传输按钮）——
@@ -310,7 +365,7 @@ class MainWindow(QMainWindow):
         main_layout.setSpacing(0)
 
         content_wrap = QWidget()
-        content_wrap.setFixedWidth(CONTENT_WIDTH)
+        content_wrap.setMinimumWidth(CONTENT_WIDTH)
         content_layout = QVBoxLayout(content_wrap)
         content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(0)
@@ -322,15 +377,15 @@ class MainWindow(QMainWindow):
 
         source_host = QWidget()
         source_host.setObjectName("cardHost")
-        source_host.setFixedWidth(CARD_WIDTH)
+        source_host.setMinimumWidth(CARD_WIDTH)
         source_host_l = QVBoxLayout(source_host)
         source_host_l.setContentsMargins(0, 0, 0, 0)
         self._source_stack = QStackedWidget()
-        self._source_stack.setFixedSize(CARD_WIDTH, CARD_HEIGHT)
+        self._source_stack.setMinimumSize(CARD_WIDTH, CARD_HEIGHT)
         self.source_card = SourceCard(self._symbol_font)
-        self.source_card.setFixedSize(CARD_WIDTH, CARD_HEIGHT)
+        self.source_card.setMinimumSize(CARD_WIDTH, CARD_HEIGHT)
         self.phone_source_card = PhoneSourceCard()
-        self.phone_source_card.setFixedSize(CARD_WIDTH, CARD_HEIGHT)
+        self.phone_source_card.setMinimumSize(CARD_WIDTH, CARD_HEIGHT)
         self._source_stack.addWidget(self.source_card)
         self._source_stack.addWidget(self.phone_source_card)
         source_host_l.addWidget(self._source_stack)
@@ -348,22 +403,22 @@ class MainWindow(QMainWindow):
         self.btn_swap = QToolButton()
         self.btn_swap.setObjectName("swapBtn")
         self.btn_swap.setText(sym("arrow.left.arrow.right"))
-        self.btn_swap.setToolTip("切换传输方向")
+        self.btn_swap.setToolTip(tr('切换传输方向'))
         self.btn_swap.setFixedSize(SWAP_BTN_SIZE, SWAP_BTN_SIZE)
         self.btn_swap.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_swap.clicked.connect(self._toggle_direction)
 
         dest_host = QWidget()
         dest_host.setObjectName("cardHost")
-        dest_host.setFixedWidth(CARD_WIDTH)
+        dest_host.setMinimumWidth(CARD_WIDTH)
         dest_host_l = QVBoxLayout(dest_host)
         dest_host_l.setContentsMargins(0, 0, 0, 0)
         self._dest_stack = QStackedWidget()
-        self._dest_stack.setFixedSize(CARD_WIDTH, CARD_HEIGHT)
+        self._dest_stack.setMinimumSize(CARD_WIDTH, CARD_HEIGHT)
         self.dest_card = DestinationCard()
-        self.dest_card.setFixedSize(CARD_WIDTH, CARD_HEIGHT)
+        self.dest_card.setMinimumSize(CARD_WIDTH, CARD_HEIGHT)
         self.local_dest_card = LocalDestinationCard()
-        self.local_dest_card.setFixedSize(CARD_WIDTH, CARD_HEIGHT)
+        self.local_dest_card.setMinimumSize(CARD_WIDTH, CARD_HEIGHT)
         self._dest_stack.addWidget(self.dest_card)
         self._dest_stack.addWidget(self.local_dest_card)
         dest_host_l.addWidget(self._dest_stack)
@@ -381,7 +436,7 @@ class MainWindow(QMainWindow):
 
         transfer_section = QWidget()
         self.transfer_section = transfer_section
-        transfer_section.setFixedWidth(CONTENT_WIDTH)
+        transfer_section.setMinimumWidth(CONTENT_WIDTH)
         transfer_section_l = QVBoxLayout(transfer_section)
         self._transfer_section_layout = transfer_section_l
         transfer_section_l.setContentsMargins(0, 14, 0, 0)
@@ -393,16 +448,18 @@ class MainWindow(QMainWindow):
             self.transfer_arrow, 0, Qt.AlignmentFlag.AlignHCenter
         )
 
-        self.btn_go = QPushButton("传输到手机")
+        self.btn_go = QPushButton(tr('传输到手机'))
         self.btn_go.setObjectName("transferBtn")
         self.btn_go.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_go.setFixedSize(220, 44)
+        self.btn_go.setMinimumSize(220, 44)
         self.btn_go.setEnabled(False)
         self.btn_go.setProperty("ready", False)
         self.btn_go.clicked.connect(self.start_transfer)
 
-        self.transfer_hint = QLabel("请先选择内容")
+        self.transfer_hint = QLabel(tr('请先选择内容'))
         self.transfer_hint.setObjectName("transferHint")
+        self.transfer_hint.setWordWrap(True)
+        self.transfer_hint.setMinimumWidth(320)
         self.transfer_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.progress_wrap = QWidget()
@@ -424,16 +481,18 @@ class MainWindow(QMainWindow):
         self.progress_pct.setAlignment(
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         )
-        self.progress_pct.setFixedWidth(42)
+        self.progress_pct.setMinimumWidth(42)
         bar_row.addWidget(self.progress_bar, 1)
         bar_row.addWidget(self.progress_pct)
 
-        meta_row = QHBoxLayout()
+        meta_row = QVBoxLayout()
         meta_row.setSpacing(12)
-        self.progress_count = QLabel("0/0 个文件")
+        self.progress_count = QLabel(tr('0/0 个文件'))
         self.progress_count.setObjectName("caption")
+        self.progress_count.setWordWrap(True)
         self.progress_eta = QLabel("")
         self.progress_eta.setObjectName("caption")
+        self.progress_eta.setWordWrap(True)
         self.progress_eta.setAlignment(Qt.AlignmentFlag.AlignRight)
         meta_row.addWidget(self.progress_count)
         meta_row.addStretch(1)
@@ -444,7 +503,7 @@ class MainWindow(QMainWindow):
         self.progress_file.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.progress_file.setFixedHeight(18)
 
-        self.btn_stop = QPushButton("取消")
+        self.btn_stop = QPushButton(tr('取消'))
         self.btn_stop.setObjectName("stopBtn")
         self.btn_stop.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_stop.setFixedHeight(30)
@@ -469,13 +528,13 @@ class MainWindow(QMainWindow):
         idle_layout.addStretch(1)
 
         self.transfer_panel = QWidget()
-        self.transfer_panel.setFixedSize(320, TRANSFER_PANEL_HEIGHT)
+        self.transfer_panel.setMinimumSize(360, TRANSFER_PANEL_HEIGHT)
         panel_layout = QVBoxLayout(self.transfer_panel)
         panel_layout.setContentsMargins(0, 0, 0, 0)
         panel_layout.setSpacing(0)
 
         self.transfer_stack = QStackedWidget()
-        self.transfer_stack.setFixedSize(320, TRANSFER_PANEL_HEIGHT)
+        self.transfer_stack.setMinimumSize(360, TRANSFER_PANEL_HEIGHT)
         self.transfer_stack.addWidget(idle_page)
         self.transfer_stack.addWidget(self.progress_wrap)
         self.transfer_stack.setCurrentIndex(0)
@@ -502,10 +561,12 @@ class MainWindow(QMainWindow):
 
         log_head = QHBoxLayout()
         log_head.setSpacing(8)
-        self.log_summary = QLabel("等待连接设备…")
+        self.log_summary = QLabel(tr('等待连接设备…'))
         self.log_summary.setObjectName("logText")
-        self.btn_log_toggle = QPushButton(f"查看详情  {sym('chevron.right')}")
+        self.log_summary.setWordWrap(True)
+        self.btn_log_toggle = QPushButton(tr('查看详情  {p0}', p0=sym('chevron.right')))
         self.btn_log_toggle.setObjectName("logLink")
+        self.btn_log_toggle.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
         self.btn_log_toggle.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_log_toggle.clicked.connect(self._toggle_log_detail)
         log_head.addWidget(self.log_summary, 1)
@@ -519,6 +580,7 @@ class MainWindow(QMainWindow):
 
         self.serial_label = QLabel("")
         self.serial_label.setObjectName("caption")
+        self.serial_label.setWordWrap(True)
         self.serial_label.setVisible(False)
         log_l.addWidget(self.serial_label)
 
@@ -568,7 +630,7 @@ class MainWindow(QMainWindow):
         with_serial = self._device is not None
         chevron = sym("chevron.down") if expanding else sym("chevron.right")
         self.btn_log_toggle.setText(
-            f"收起详情  {chevron}" if expanding else f"查看详情  {chevron}"
+            tr('收起详情  {p0}', p0=chevron) if expanding else tr('查看详情  {p0}', p0=chevron)
         )
 
         if expanding:
@@ -576,7 +638,7 @@ class MainWindow(QMainWindow):
             self._collapsed_window_height = self.height()
             self._lock_main_area_height()
             self.resize(self.width(), self.height() + delta)
-            self.log_detail.sync_lines(self._log_lines)
+            self.log_detail.sync_entries(self._log_entries)
             self.log_detail.setVisible(True)
             self.serial_label.setVisible(with_serial)
             self._log_detail_expanded = True
@@ -611,6 +673,9 @@ class MainWindow(QMainWindow):
     def _apply_theme(self, *_args) -> None:
         theme = AppTheme(self._is_dark())
         self.setStyleSheet(theme.stylesheet(self._symbol_font))
+        self.language_button.setIcon(make_mac_globe_icon(
+            theme.secondary, theme.accent_hover, theme.btn_disabled_text
+        ))
         self.transfer_arrow.set_colors(theme.quaternary, theme.tertiary)
 
     def _open_wifi_dialog(self) -> None:
@@ -627,7 +692,7 @@ class MainWindow(QMainWindow):
         """跨端文本与链接速传对话框 (⌘⇧V)"""
         serial = get_active_serial()
         if not serial:
-            self._show_toast("请先连接手机")
+            self._show_toast(tr('请先连接手机'))
             return
         clipboard = QGuiApplication.clipboard()
         initial_text = clipboard.text() if clipboard else ""
@@ -637,16 +702,21 @@ class MainWindow(QMainWindow):
 
     def _on_quick_text_sent(self, action_type: str, detail: str) -> None:
         if action_type == "clipboard":
-            self._show_toast("已复制到手机剪贴板（可在手机直接粘贴）")
+            self._show_toast(tr('已复制到手机剪贴板（可在手机直接粘贴）'))
         else:
-            self._show_toast(f"跨端速传成功: {detail}")
-        self.append_log(f"[跨端速传] {action_type}: {detail}")
+            self._show_toast(tr('跨端速传成功: {p0}', p0=detail))
+        action_label = {
+            "clipboard": tr('📋 复制到剪贴板'),
+            "url": "URL",
+            "file": tr('📄 另存为便签文件'),
+        }.get(action_type, action_type)
+        self.append_log(tr('[跨端速传] {p0}: {p1}', p0=action_label, p1=detail))
 
     def _launch_scrcpy(self) -> None:
         """启动 scrcpy 投屏控制或弹出安装指引 (⌘⇧M)。"""
         serial = get_active_serial()
         if not serial:
-            self._show_toast("请先连接手机")
+            self._show_toast(tr('请先连接手机'))
             return
 
         if not is_scrcpy_available():
@@ -655,7 +725,7 @@ class MainWindow(QMainWindow):
             return
 
         if self._scrcpy_process is not None and self._scrcpy_process.poll() is None:
-            self._show_toast("投屏窗口已在运行中")
+            self._show_toast(tr('投屏窗口已在运行中'))
             return
 
         dev_name = self.device_name.text().strip() or "Android"
@@ -663,30 +733,30 @@ class MainWindow(QMainWindow):
         proc, err = launch_scrcpy(serial=serial, title=title, stay_awake=True)
         if proc is not None:
             self._scrcpy_process = proc
-            self._show_toast("已启动手机投屏")
-            self.append_log(f"[投屏] 已启动 scrcpy: {title} ({serial})")
+            self._show_toast(tr('已启动手机投屏'))
+            self.append_log(tr('[投屏] 已启动 scrcpy: {p0} ({p1})', p0=title, p1=serial))
         else:
-            self._show_toast(f"启动投屏失败: {err}")
-            self.append_log(f"[投屏错误] {err}")
+            self._show_toast(tr('启动投屏失败: {p0}', p0=err))
+            self.append_log(tr('[投屏错误] {p0}', p0=err))
 
     def _on_local_preview(self, path: str) -> None:
         """空格键或双击快速预览电脑端本地文件。"""
         if self._busy:
-            self._show_toast("当前正在传输文件，传输完成后可预览")
+            self._show_toast(tr('当前正在传输文件，传输完成后可预览'))
             return
         p = Path(path)
         if not p.exists() or p.stat().st_size == 0:
-            self._show_toast("文件为空或尚未写入完成，暂无法预览")
+            self._show_toast(tr('文件为空或尚未写入完成，暂无法预览'))
             return
         self._quicklook.toggle(path)
 
     def _on_remote_preview(self, remote_path: str, remote_size: int) -> None:
         """空格键或双击预览手机端文件：若无本地缓存则异步快速拉取后预览。"""
         if self._busy:
-            self._show_toast("当前正在传输文件，传输完成后可预览")
+            self._show_toast(tr('当前正在传输文件，传输完成后可预览'))
             return
         if remote_size <= 0:
-            self._show_toast("空文件暂不支持预览")
+            self._show_toast(tr('空文件暂不支持预览'))
             return
         if self._preview_worker is not None and self._preview_worker.isRunning():
             return
@@ -697,8 +767,8 @@ class MainWindow(QMainWindow):
             self._quicklook.close()
             return
         name = Path(remote_path).name
-        self._show_toast(f"正在加载预览：{name}…")
-        self.append_log(f"正在读取手机预览文件：{remote_path}…")
+        self._show_toast(tr('正在加载预览：{p0}…', p0=name))
+        self.append_log(tr('正在读取手机预览文件：{p0}…', p0=remote_path))
 
         self._preview_worker = RemotePreviewWorker(
             remote_path, remote_size, str(cache_path), serial=serial, parent=self
@@ -710,35 +780,34 @@ class MainWindow(QMainWindow):
     def _on_remote_preview_ready(self, local_cache_path: str) -> None:
         self._hide_toast()
         if self._preview_worker is not None and self._preview_worker._serial != get_active_serial():
-            self.append_log("预览完成时设备已切换，已忽略旧设备文件")
+            self.append_log(tr('预览完成时设备已切换，已忽略旧设备文件'))
             return
         self._quicklook.preview(local_cache_path)
 
     def _on_remote_preview_failed(self, error: str) -> None:
         self._hide_toast()
-        self.append_log(f"预览加载失败：{error}")
-        self._show_toast("无法加载文件预览")
+        self.append_log(tr('预览加载失败：{p0}', p0=error))
+        self._show_toast(tr('无法加载文件预览'))
 
     def _on_apk_detected(self, apks: list[str]) -> None:
         """当拖拽或选择的文件中包含 .apk 安装包时触发快捷安装选项。"""
         if not apks or self._device is None:
             return
 
-        device_name = self.device_name.text() or "当前手机"
+        device_name = self.device_name.text() or tr('当前手机')
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Icon.Question)
-        box.setWindowTitle("检测到 Android 安装包")
+        box.setWindowTitle(tr('检测到 Android 安装包'))
 
         preview_names = "\n".join(f"• {Path(p).name}" for p in apks[:5])
         if len(apks) > 5:
-            preview_names += f"\n…等共 {len(apks)} 个安装包"
+            preview_names += tr('\n…等共 {p0} 个安装包', p0=len(apks))
 
         box.setText(
-            f"检测到已添加 {len(apks)} 个 APK 安装包：\n\n{preview_names}\n\n"
-            f"是否直接将其安装到手机（{device_name}）？"
+            tr('检测到已添加 {p0} 个 APK 安装包：\n\n{p1}\n\n是否直接将其安装到手机（{p2}）？', p0=len(apks), p1=preview_names, p2=device_name)
         )
-        install_btn = box.addButton("⚡ 直接安装到手机", QMessageBox.ButtonRole.AcceptRole)
-        box.addButton("仅加入传输列表", QMessageBox.ButtonRole.RejectRole)
+        install_btn = box.addButton(tr('⚡ 直接安装到手机'), QMessageBox.ButtonRole.AcceptRole)
+        box.addButton(tr('仅加入传输列表'), QMessageBox.ButtonRole.RejectRole)
         box.exec()
 
         if box.clickedButton() == install_btn:
@@ -749,15 +818,15 @@ class MainWindow(QMainWindow):
         if not apks:
             return
         if self._device is None:
-            QMessageBox.warning(self, "设备未连接", "请先连接手机并开启 USB 调试后再安装应用。")
+            QMessageBox.warning(self, tr('设备未连接'), tr('请先连接手机并开启 USB 调试后再安装应用。'))
             return
         if self._apk_worker is not None and self._apk_worker.isRunning():
-            QMessageBox.information(self, "正在安装", "已有应用安装任务正在进行中，请稍候。")
+            QMessageBox.information(self, tr('正在安装'), tr('已有应用安装任务正在进行中，请稍候。'))
             return
 
         serial = get_active_serial()
-        self.append_log(f"开始向手机安装 {len(apks)} 个应用…")
-        self._show_toast(f"正在安装应用：{Path(apks[0]).name}…")
+        self.append_log(tr('开始向手机安装 {p0} 个应用…', p0=len(apks)))
+        self._show_toast(tr('正在安装应用：{p0}…', p0=Path(apks[0]).name))
 
         self._apk_worker = ApkInstallWorker(apks, serial=serial, parent=self)
         self._apk_worker.log.connect(self.append_log, _UI)
@@ -766,36 +835,38 @@ class MainWindow(QMainWindow):
         self._apk_worker.start()
 
     def _on_apk_progress(self, current: int, total: int, name: str) -> None:
-        self.log_summary.setText(f"正在安装应用 ({current}/{total})：{name}")
-        self._show_toast(f"正在安装 ({current}/{total})：{name}")
+        self.log_summary.setText(tr('正在安装应用 ({p0}/{p1})：{p2}', p0=current, p1=total, p2=name))
+        self._show_toast(tr('正在安装 ({p0}/{p1})：{p2}', p0=current, p1=total, p2=name))
 
     def _on_apk_finished(self, success_count: int, total_count: int, errors: list) -> None:
         self._hide_toast()
         if success_count == total_count and total_count > 0:
-            msg = f"已成功安装 {success_count} 个应用到手机"
-            self.log_summary.setText("应用安装完成")
+            msg = tr('已成功安装 {p0} 个应用到手机', p0=success_count)
+            self.log_summary.setText(tr('应用安装完成'))
             self._show_toast(f"✓ {msg}")
-            send_macos_notification(msg, title="应用安装成功", subtitle="Phone Transfer")
+            send_macos_notification(msg, title=tr('应用安装成功'), subtitle="Phone Transfer")
         elif success_count > 0:
-            msg = f"已安装 {success_count}/{total_count} 个应用（{len(errors)} 个失败）"
+            msg = tr('已安装 {p0}/{p1} 个应用（{p2} 个失败）', p0=success_count, p1=total_count, p2=len(errors))
             self.log_summary.setText(msg)
             self._show_toast(msg)
-            send_macos_notification(msg, title="应用安装结果", subtitle="Phone Transfer")
+            send_macos_notification(msg, title=tr('应用安装结果'), subtitle="Phone Transfer")
         else:
-            err_summary = errors[0] if errors else "安装未成功"
-            self.log_summary.setText("应用安装失败")
-            self._show_toast("应用安装失败")
-            send_macos_notification(f"安装失败：{err_summary}", title="应用安装失败", subtitle="Phone Transfer")
+            err_summary = errors[0] if errors else tr('安装未成功')
+            self.log_summary.setText(tr('应用安装失败'))
+            self._show_toast(tr('应用安装失败'))
+            send_macos_notification(tr('安装失败：{p0}', p0=err_summary), title=tr('应用安装失败'), subtitle="Phone Transfer")
 
-    def append_log(self, text: str) -> None:
-        line = text.rstrip()
-        if not line:
+    def append_log(self, text: str, *, kind: str | None = None) -> None:
+        entry = parse_log_line(text, kind=kind)
+        if entry is None:
             return
-        self._log_lines.append(line)
-        self.log_detail.append(line)
+        self._log_lines.append(text)
+        self._log_entries.append(entry)
+        self.log_detail.append_entry(entry)
 
     def _clear_log(self) -> None:
         self._log_lines.clear()
+        self._log_entries.clear()
         self.log_detail.clear()
 
     def _active_source_card(self) -> SourceCard | PhoneSourceCard:
@@ -816,8 +887,8 @@ class MainWindow(QMainWindow):
         self._direction = (
             "to_computer" if self._direction == "to_phone" else "to_phone"
         )
-        label = "传输到电脑" if self._direction == "to_computer" else "传输到手机"
-        self.append_log(f"已切换方向：{label}")
+        label = tr('传输到电脑') if self._direction == "to_computer" else tr('传输到手机')
+        self.append_log(tr('已切换方向：{p0}', p0=label))
         self._apply_direction()
 
     def _apply_direction(self) -> None:
@@ -838,27 +909,27 @@ class MainWindow(QMainWindow):
         label = remote_dir
         for name, path in PHONE_QUICK_PRESETS:
             if remote_dir.rstrip("/") == path.rstrip("/"):
-                label = name
+                label = tr(name)
                 break
         else:
             for name, path in DEST_PRESETS:
                 if remote_dir.rstrip("/") == path.rstrip("/"):
-                    label = name
+                    label = tr(name)
                     break
-        self.append_log(f"已切换到手机目录：{label}")
+        self.append_log(tr('已切换到手机目录：{p0}', p0=label))
 
     def _on_remote_op_started(self, message: str) -> None:
-        self.append_log(message, "info")
+        self.append_log(message, kind="progress")
 
     def _on_remote_op_finished(self, success: bool, message: str, op_type: str) -> None:
         if success:
-            self.toast.show(message, "success")
-            self.append_log(message, "success")
+            self._show_toast(message)
+            self.append_log(message, kind="success")
             if op_type == "delete":
                 self._refresh_storage(force=True)
         else:
-            self.toast.show(message, "error")
-            self.append_log(f"操作失败：{message}", "error")
+            self._show_toast(message)
+            self.append_log(tr('操作失败：{p0}', p0=message), kind="error")
 
     def _update_transfer_button(self) -> None:
         has_files = bool(self._active_source_card().paths())
@@ -876,23 +947,23 @@ class MainWindow(QMainWindow):
             if ready
             else Qt.CursorShape.ForbiddenCursor
         )
-        self.btn_go.setText("传输到手机" if to_phone else "传输到电脑")
+        self.btn_go.setText(tr('传输到手机') if to_phone else tr('传输到电脑'))
         if not has_files:
             self.transfer_hint.setText(
-                "请先选择内容" if to_phone else "请从手机选择文件"
+                tr('请先选择内容') if to_phone else tr('请从手机选择文件')
             )
             self.transfer_hint.setVisible(True)
         elif not connected:
             hint_key = self._connect_hint_key or ""
             if hint_key.startswith("usb_debug_off"):
-                self.transfer_hint.setText("请先打开手机 USB 调试")
+                self.transfer_hint.setText(tr('请先打开手机 USB 调试'))
             elif hint_key.startswith("adb_state:unauthorized"):
-                self.transfer_hint.setText("请在手机上允许 USB 调试")
+                self.transfer_hint.setText(tr('请在手机上允许 USB 调试'))
             else:
-                self.transfer_hint.setText("请先连接手机")
+                self.transfer_hint.setText(tr('请先连接手机'))
             self.transfer_hint.setVisible(True)
         else:
-            self.transfer_hint.setText("可开始传输")
+            self.transfer_hint.setText(tr('可开始传输'))
             self.transfer_hint.setVisible(True)
 
     def _set_progress_visible(self, visible: bool) -> None:
@@ -921,15 +992,15 @@ class MainWindow(QMainWindow):
                 if multi
                 else Qt.CursorShape.ArrowCursor
             )
-            tip = "点击切换设备" if multi else "当前已连接设备"
+            tip = tr('点击切换设备') if multi else tr('当前已连接设备')
             self.device_name.setToolTip(tip)
             self.device_chevron.setToolTip(tip)
             self.status_dot.setObjectName("statusDotOnline")
             self.status_dot.setVisible(True)
             if multi:
-                self.status_connected.setText(f"已连接 · {len(self._online_devices)} 台")
+                self.status_connected.setText(tr('已连接 · {p0} 台', p0=len(self._online_devices)))
             else:
-                self.status_connected.setText("已连接")
+                self.status_connected.setText(tr('已连接'))
             self.status_connected.setVisible(True)
         elif state == "busy":
             self.device_name.setText(model)
@@ -941,11 +1012,11 @@ class MainWindow(QMainWindow):
             self.status_dot.setVisible(True)
             self.status_connected.setVisible(False)
         else:
-            self.device_name.setText(model if model else "未连接")
+            self.device_name.setText(model if model else tr('未连接'))
             self.device_name.setEnabled(False)
             self.device_chevron.setVisible(False)
             self.device_name.setCursor(Qt.CursorShape.ArrowCursor)
-            self.device_name.setToolTip("连接设备后可在此切换")
+            self.device_name.setToolTip(tr('连接设备后可在此切换'))
             self.status_dot.setObjectName("statusDotOffline")
             self.status_dot.setVisible(False)
             self.status_connected.setVisible(False)
@@ -996,19 +1067,19 @@ class MainWindow(QMainWindow):
         self._connect_hint_key = "online"
         name = device_display_name(device)
         self.set_connection_ui("online", name, "")
-        self.log_summary.setText(f"已连接 {name}")
-        self.serial_label.setText(f"序列号 {serial}  ·  adb {ADB}")
+        self.log_summary.setText(tr('已连接 {p0}', p0=name))
+        self.serial_label.setText(tr('序列号 {p0}  ·  adb {p1}', p0=serial, p1=ADB))
         if announce:
             if is_emulator_serial(serial):
-                kind = "模拟器"
+                kind = tr('模拟器')
             elif is_wifi_serial(serial):
-                kind = "Wi-Fi 设备"
+                kind = tr('Wi-Fi 设备')
             else:
-                kind = "手机"
+                kind = tr('手机')
             if switched:
-                self.append_log(f"已切换到{kind}：{name}（{serial}）")
+                self.append_log(tr('已切换到{p0}：{p1}（{p2}）', p0=kind, p1=name, p2=serial), kind="success")
             else:
-                self.append_log(f"已连接 {name}（{serial}）")
+                self.append_log(tr('已连接 {p0}（{p1}）', p0=name, p1=serial), kind="success")
         self._start_storage_poll()
         if self._direction == "to_computer":
             self.phone_source_card.reload_listing()
@@ -1032,10 +1103,10 @@ class MainWindow(QMainWindow):
         if manual:
             self._device_miss_count = 0
             self._device = None
-            self.set_connection_ui("busy", "检测中…", "")
+            self.set_connection_ui("busy", tr('检测中…'), "")
             self.btn_refresh.setEnabled(False)
-            self.log_summary.setText("正在检测设备…")
-            self.append_log("正在检测设备…")
+            self.log_summary.setText(tr('正在检测设备…'))
+            self.append_log(tr('正在检测设备…'), kind="device")
             self._update_transfer_button()
 
         self._device_probe_busy = True
@@ -1045,7 +1116,7 @@ class MainWindow(QMainWindow):
         """更新摘要；仅在状态变化或手动刷新时写日志，避免轮询刷屏。"""
         self.log_summary.setText(summary)
         if manual or key != self._connect_hint_key:
-            self.append_log(detail or summary)
+            self.append_log(detail or summary, kind="warning")
         self._connect_hint_key = key
 
     def _clear_device_selection(self) -> None:
@@ -1104,14 +1175,12 @@ class MainWindow(QMainWindow):
             if usb_phones:
                 label = usb_phones[0].get("label") or "Android"
                 serial = usb_phones[0].get("serial") or ""
-                self.set_connection_ui("offline", "需开启 USB 调试", "")
-                summary = f"已插入 {label}，但未开启 USB 调试"
+                self.set_connection_ui("offline", tr('需开启 USB 调试'), "")
+                summary = tr('已插入 {p0}，但未开启 USB 调试', p0=label)
                 detail = (
-                    f"检测到手机已通过 USB 连接（{label}"
+                    tr('检测到手机已通过 USB 连接（{p0}', p0=label)
                     + (f" · {serial}" if serial else "")
-                    + "），但调试通道未就绪。"
-                    "请打开：设置 → 开发者选项 → USB 调试；"
-                    "通知栏 USB 用途选「文件传输」，并在弹窗中点「允许」。"
+                    + tr('），但调试通道未就绪。请打开：设置 → 开发者选项 → USB 调试；通知栏 USB 用途选「文件传输」，并在弹窗中点「允许」。')
                 )
                 self._emit_connect_hint(
                     f"usb_debug_off:{serial or label}",
@@ -1120,11 +1189,11 @@ class MainWindow(QMainWindow):
                     manual=manual or prev_serial is not None,
                 )
             else:
-                self.set_connection_ui("offline", "未连接", "")
+                self.set_connection_ui("offline", tr('未连接'), "")
                 self._emit_connect_hint(
                     "no_device",
-                    "未检测到设备",
-                    "未检测到设备",
+                    tr('未检测到设备'),
+                    tr('未检测到设备'),
                     manual=manual or prev_serial is not None,
                 )
             self._update_transfer_button()
@@ -1150,8 +1219,8 @@ class MainWindow(QMainWindow):
                     if d.get("serial") != selected["serial"]
                 ]
                 self.append_log(
-                    f"另有 {len(others)} 台设备在线，可点击右上角设备名切换："
-                    + "、".join(others)
+                    tr('另有 {p0} 台设备在线，可点击右上角设备名切换：', p0=len(others))
+                    + "、".join(others), kind="device"
                 )
         else:
             d = devices[0]
@@ -1165,15 +1234,15 @@ class MainWindow(QMainWindow):
             tip = explain_adb_device_state(state)
             self.set_connection_ui("offline", model, "")
             if state == "unauthorized":
-                title = "需允许 USB 调试"
-                summary = f"{model} 已连接，请在手机上允许 USB 调试"
+                title = tr('需允许 USB 调试')
+                summary = tr('{p0} 已连接，请在手机上允许 USB 调试', p0=model)
             else:
                 title = tip
                 summary = f"{model}：{tip}"
             self._emit_connect_hint(
                 f"adb_state:{state}:{d.get('serial')}",
                 summary,
-                f"{title}（状态：{state or '未知'}）",
+                tr('{p0}（状态：{p1}）', p0=title, p1=state or tr('未知')),
                 manual=manual,
             )
             self._update_transfer_button()
@@ -1195,9 +1264,9 @@ class MainWindow(QMainWindow):
             else:
                 return
         self._clear_device_selection()
-        self.set_connection_ui("offline", "检测失败", "")
-        self.log_summary.setText("设备检测失败")
-        self.append_log(text)
+        self.set_connection_ui("offline", tr('检测失败'), "")
+        self.log_summary.setText(tr('设备检测失败'))
+        self.append_log(text, kind="error")
         self._update_transfer_button()
 
     def _poll_storage(self) -> None:
@@ -1271,10 +1340,10 @@ class MainWindow(QMainWindow):
 
         paths: list[str] = []
         try:
-            paths = pick_files_and_folders("选择要传输的文件或文件夹")
+            paths = pick_files_and_folders(tr('选择要传输的文件或文件夹'))
         except Exception as e:
-            self.append_log(f"打开选择器失败：{e}")
-            QMessageBox.warning(self, "无法打开选择器", str(e))
+            self.append_log(tr('打开选择器失败：{p0}', p0=e))
+            QMessageBox.warning(self, tr('无法打开选择器'), str(e))
         finally:
             self._picking = False
             self.source_card.btn_pick.setEnabled(True)
@@ -1283,27 +1352,26 @@ class MainWindow(QMainWindow):
             added = self.source_card.add_paths(paths)
             if added:
                 names = ", ".join(Path(p).name for p in self.source_card.paths()[-added:])
-                self.append_log(f"已添加 {added} 项：{names}")
+                self.append_log(tr('已添加 {p0} 项：{p1}', p0=added, p1=names))
 
     def _ask_sync_policy(
         self, conflicts: list[str], *, to_phone: bool
     ) -> FolderSyncMode | None:
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Icon.Question)
-        box.setWindowTitle("发现同名文件")
-        target = "手机目标文件夹" if to_phone else "电脑目标文件夹"
+        box.setWindowTitle(tr('发现同名文件'))
+        target = tr('手机目标文件夹') if to_phone else tr('电脑目标文件夹')
         box.setText(
-            f"在{target}中已存在 {len(conflicts)} 个同名文件。\n"
-            "请选择处理方式："
+            tr('在{p0}中已存在 {p1} 个同名文件。\n请选择处理方式：', p0=target, p1=len(conflicts))
         )
         preview = conflicts[:30]
         detail = "\n".join(preview)
         if len(conflicts) > 30:
-            detail += f"\n…等 {len(conflicts)} 个"
+            detail += tr('\n…等 {p0} 个', p0=len(conflicts))
         box.setDetailedText(detail)
-        overwrite_btn = box.addButton("覆盖同名文件", QMessageBox.ButtonRole.DestructiveRole)
-        keep_btn = box.addButton("两者都保留", QMessageBox.ButtonRole.AcceptRole)
-        box.addButton("取消", QMessageBox.ButtonRole.RejectRole)
+        overwrite_btn = box.addButton(tr('覆盖同名文件'), QMessageBox.ButtonRole.DestructiveRole)
+        keep_btn = box.addButton(tr('两者都保留'), QMessageBox.ButtonRole.AcceptRole)
+        box.addButton(tr('取消'), QMessageBox.ButtonRole.RejectRole)
         box.exec()
         clicked = box.clickedButton()
         if clicked == overwrite_btn:
@@ -1323,52 +1391,52 @@ class MainWindow(QMainWindow):
         if not dest:
             QMessageBox.warning(
                 self,
-                "还差一步",
-                "请填写手机保存路径" if to_phone else "请填写电脑保存路径",
+                tr('还差一步'),
+                tr('请填写手机保存路径') if to_phone else tr('请填写电脑保存路径'),
             )
             return
 
         # 立即锁定传输按钮并更新提示，防止重复点击造成并发冲突
         self.btn_go.setEnabled(False)
-        self.log_summary.setText("正在检查待传输文件…")
+        self.log_summary.setText(tr('正在检查待传输文件…'))
         QApplication.processEvents()
 
         def _cancel_prep(err_title: str = "", err_msg: str = "") -> None:
             self.btn_go.setEnabled(True)
-            self.log_summary.setText("就绪")
+            self.log_summary.setText(tr('就绪'))
             if err_title and err_msg:
                 QMessageBox.critical(self, err_title, err_msg)
 
         if to_phone:
             missing = [p for p in items if not Path(p).exists()]
             if missing:
-                _cancel_prep("路径无效", f"找不到：\n{missing[0]}")
+                _cancel_prep(tr('路径无效'), tr('找不到：\n{p0}', p0=missing[0]))
                 return
             for local in items:
                 ok, err = verify_local_pushable(Path(local))
                 if not ok:
-                    _cancel_prep("无法传输", err)
+                    _cancel_prep(tr('无法传输'), err)
                     return
         else:
             for remote in items:
                 if not remote_exists(remote):
-                    _cancel_prep("路径无效", f"手机上找不到：\n{remote}")
+                    _cancel_prep(tr('路径无效'), tr('手机上找不到：\n{p0}', p0=remote))
                     return
             ok, err = ensure_local_dir(dest)
             if not ok:
-                _cancel_prep("无法传输", err)
+                _cancel_prep(tr('无法传输'), err)
                 return
 
         sync_mode: FolderSyncMode = "overwrite"
         try:
-            self.log_summary.setText("正在比对文件差异…")
+            self.log_summary.setText(tr('正在比对文件差异…'))
             QApplication.processEvents()
             if to_phone:
                 conflicts = collect_sync_conflicts(items, dest)
             else:
                 conflicts = collect_pull_conflicts(items, dest)
         except (subprocess.TimeoutExpired, RuntimeError) as exc:
-            _cancel_prep("比对失败", str(exc) or "比对同名文件超时，请稍后重试")
+            _cancel_prep(tr('比对失败'), str(exc) or tr('比对同名文件超时，请稍后重试'))
             return
         if conflicts:
             choice = self._ask_sync_policy(conflicts, to_phone=to_phone)
@@ -1376,8 +1444,8 @@ class MainWindow(QMainWindow):
                 _cancel_prep()
                 return
             sync_mode = choice
-            label = "覆盖同名文件" if choice == "overwrite" else "两者都保留"
-            self.append_log(f"同名文件处理：{label}（{len(conflicts)} 个）")
+            label = tr('覆盖同名文件') if choice == "overwrite" else tr('两者都保留')
+            self.append_log(tr('同名文件处理：{p0}（{p1} 个）', p0=label, p1=len(conflicts)))
 
         self._busy = True
         self._transfer_cancelled = False
@@ -1387,12 +1455,12 @@ class MainWindow(QMainWindow):
         self.btn_swap.setEnabled(False)
         self._set_progress_visible(True)
         self.progress_bar.setRange(0, 0)  # Indeterminate until a verified file completes.
-        self.progress_pct.setText("传输中")
-        self.progress_count.setText("0 B 已校验")
-        self.progress_file.setText("准备中…")
+        self.progress_pct.setText(tr('传输中'))
+        self.progress_count.setText(tr('0 B 已校验'))
+        self.progress_file.setText(tr('准备中…'))
         self.progress_file.setToolTip("")
         self.progress_eta.setText("")
-        self.append_log(f"开始传输 {len(items)} 项 → {dest}")
+        self.append_log(tr('开始传输 {p0} 项 → {p1}', p0=len(items), p1=dest))
 
         thread = QThread()
         worker = TransferWorker(
@@ -1432,7 +1500,7 @@ class MainWindow(QMainWindow):
         # is deliberately indeterminate rather than estimated by a fake speed.
         if done_files == 0:
             self.progress_bar.setRange(0, 0)
-            self.progress_pct.setText("传输中")
+            self.progress_pct.setText(tr('传输中'))
         else:
             self.progress_bar.setRange(0, 100)
             pct = int(done_bytes / total_bytes * 100) if total_bytes else 0
@@ -1440,18 +1508,18 @@ class MainWindow(QMainWindow):
             self.progress_pct.setText(f"{pct}%")
         size_text = f"{human_size(done_bytes)} / {human_size(total_bytes)}"
         if total_files > 1:
-            self.progress_count.setText(f"{size_text}（已验证 {done_files}/{total_files} 个）")
+            self.progress_count.setText(tr('{p0}（已验证 {p1}/{p2} 个）', p0=size_text, p1=done_files, p2=total_files))
         else:
-            self.progress_count.setText(f"{size_text}（已验证 {done_files}/{total_files}）")
+            self.progress_count.setText(tr('{p0}（已验证 {p1}/{p2}）', p0=size_text, p1=done_files, p2=total_files))
         self.progress_file.setText(self._elide_progress_name(name))
         self.progress_file.setToolTip(name)
-        self.progress_eta.setText("传输及完整性校验中 · 只统计已校验文件"
-                                  if done_files < total_files else "全部文件已校验")
+        self.progress_eta.setText(tr('传输及完整性校验中 · 只统计已校验文件')
+                                  if done_files < total_files else tr('全部文件已校验'))
 
     def stop_transfer(self) -> None:
         if self._transfer_worker is not None:
             self._transfer_worker.cancel()
-        self.append_log("正在停止传输…")
+        self.append_log(tr('正在停止传输…'), kind="warning")
 
     def _on_transfer_done(self, ok: bool, message: str) -> None:
         self._busy = False
@@ -1461,14 +1529,14 @@ class MainWindow(QMainWindow):
             self.progress_bar.setValue(100)
             self._active_source_card().clear_paths()
             self._show_toast(message)
-            self.append_log(message)
-            send_macos_notification(message, title="传输完成", subtitle="Phone Transfer")
+            self.append_log(message, kind="success")
+            send_macos_notification(message, title=tr('传输完成'), subtitle="Phone Transfer")
         else:
             self._hide_toast()
-            self.append_log(message)
-            if message != "传输已取消":
-                send_macos_notification(message, title="传输失败", subtitle="Phone Transfer")
-                QMessageBox.critical(self, "传输失败", message)
+            self.append_log(message, kind="warning" if message == tr('传输已取消') else "error")
+            if message != tr('传输已取消'):
+                send_macos_notification(message, title=tr('传输失败'), subtitle="Phone Transfer")
+                QMessageBox.critical(self, tr('传输失败'), message)
         self._update_transfer_button()
 
     def _cleanup_transfer_thread(self) -> None:

@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+from phonetransfer.i18n import tr
+
 import hashlib
 import os
 import posixpath
@@ -65,7 +67,7 @@ def run_adb_push_quiet(
             if cancel_check is not None and cancel_check():
                 proc.kill()
                 proc.communicate()
-                return False, "已取消"
+                return False, tr('已取消')
             try:
                 stdout, stderr = proc.communicate(timeout=0.25)
                 return proc.returncode == 0, f"{stdout or ''}{stderr or ''}".strip()
@@ -92,7 +94,7 @@ def remote_sha256(remote: str, byte_count: int) -> str:
     res = adb_shell(f"sha256sum {shell_quote(remote)}", timeout=timeout)
     value = (res.stdout or "").strip().split()
     if res.returncode != 0 or not value or len(value[0]) != 64:
-        raise RuntimeError("设备无法校验 SHA-256，已保留原文件")
+        raise RuntimeError(tr('设备无法校验 SHA-256，已保留原文件'))
     return value[0].lower()
 
 
@@ -113,26 +115,26 @@ def push_file_verified(
     committed = False
     try:
         if cancel_check():
-            return False, "已取消"
+            return False, tr('已取消')
         ok, output = run_adb_push_quiet(local_path, tmp, cancel_check)
         if not ok:
-            return False, output or "上传临时文件失败"
+            return False, output or tr('上传临时文件失败')
         if cancel_check():
-            return False, "已取消"
+            return False, tr('已取消')
         if local_sha256(src) != remote_sha256(tmp, src.stat().st_size):
-            return False, "SHA-256 校验失败，原文件未被覆盖"
+            return False, tr('SHA-256 校验失败，原文件未被覆盖')
         if cancel_check():
-            return False, "已取消"
+            return False, tr('已取消')
         moved = adb_shell(
             f"mv -f {shell_quote(tmp)} {shell_quote(remote_path)}",
             timeout=30,
         )
         if moved.returncode != 0:
-            return False, (moved.stderr or moved.stdout or "安全替换失败").strip()
+            return False, (moved.stderr or moved.stdout or tr('安全替换失败')).strip()
         committed = True
         return True, output
     except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
-        return False, f"安全上传失败：{exc}"
+        return False, tr('安全上传失败：{p0}', p0=exc)
     finally:
         # Only clean up the unique temporary path created by this operation.
         if not committed:
@@ -231,13 +233,13 @@ class FileProgressTracker:
     ) -> tuple[bool, list[str]]:
         """Report confirmed data only; do not invent byte progress from elapsed time."""
         if cancel_check():
-            return False, ["已取消"]
+            return False, [tr('已取消')]
         self.report(name)
         ok, lines = push_fn()
         if ok and not cancel_check():
             self.file_completed(name, batch_bytes, count=file_count)
         elif ok:
-            return False, ["已取消"]
+            return False, [tr('已取消')]
         return ok, lines
 
     def bulk_pull(
@@ -265,16 +267,15 @@ def push_folder_via_staging(
     with tempfile.TemporaryDirectory(prefix="phonetransfer_") as tmp:
         staging = Path(tmp)
         log(
-            f"批量解析完成：{len(manifest.files)} 个文件"
-            f"（含 {manifest.symlink_count} 个符号链接）"
+            tr('批量解析完成：{p0} 个文件（含 {p1} 个符号链接）', p0=len(manifest.files), p1=manifest.symlink_count)
         )
-        log("正在生成传输清单…")
+        log(tr('正在生成传输清单…'))
         copied = materialize_resolved_tree(manifest, staging)
         if copied:
-            log(f"其中 {copied} 个文件需复制（跨磁盘），其余使用硬链接")
+            log(tr('其中 {p0} 个文件需复制（跨磁盘），其余使用硬链接', p0=copied))
         if cancel_check():
-            return False, "已取消"
-        log("整包传输中…")
+            return False, tr('已取消')
+        log(tr('整包传输中…'))
         push_args = (f"{staging}/.", f"{remote}/", log, cancel_check)
         if progress:
             ok, lines = progress.bulk_push(
@@ -302,7 +303,7 @@ def list_remote_relative_files(remote_dir: str) -> set[str]:
             timeout=180,
         )
     except subprocess.TimeoutExpired:
-        raise RuntimeError("读取手机文件夹内容超时，请稍后重试")
+        raise RuntimeError(tr('读取手机文件夹内容超时，请稍后重试'))
     prefix = remote_dir + "/"
     rels: set[str] = set()
     for line in (result.stdout or "").splitlines():
@@ -384,7 +385,7 @@ def push_folder_files(
         manifest = build_push_manifest(local)
     files = manifest.files
     if not files:
-        log("文件夹为空，无需传输")
+        log(tr('文件夹为空，无需传输'))
         return True, remote
 
     parents: set[str] = set()
@@ -394,9 +395,9 @@ def push_folder_files(
             parents.add(parent)
     ensure_remote_dirs(parents)
 
-    mode_label = "覆盖" if sync_mode == "overwrite" else "两者都保留"
+    mode_label = tr('覆盖') if sync_mode == "overwrite" else tr('两者都保留')
     total = len(files)
-    log(f"同步 {total} 个文件（{mode_label}）")
+    log(tr('同步 {p0} 个文件（{p1}）', p0=total, p1=mode_label))
     if progress:
         progress.report(local.name)
 
@@ -424,7 +425,7 @@ def _push_folder_files_sequential(
 ) -> tuple[bool, str]:
     for abs_path, rel in files:
         if cancel_check():
-            return False, "已取消"
+            return False, tr('已取消')
         remote_file = f"{remote.rstrip('/')}/{rel}"
         if sync_mode == "keep_both" and remote_is_file(remote_file):
             name = posixpath.basename(rel)
@@ -438,7 +439,7 @@ def _push_folder_files_sequential(
             progress.report(rel)
         ok, output = push_file_verified(str(abs_path), remote_file, cancel_check)
         if not ok:
-            return False, "已取消" if cancel_check() else format_adb_failure([output], abs_path, remote_file)
+            return False, tr('已取消') if cancel_check() else format_adb_failure([output], abs_path, remote_file)
         if progress:
             progress.file_completed(rel, file_bytes)
     return True, remote
@@ -467,11 +468,11 @@ def _push_folder_files_parallel(
         abs_path, rel = item
         remote_file = f"{remote.rstrip('/')}/{rel}"
         if should_stop():
-            return rel, False, "已取消", 0
+            return rel, False, tr('已取消'), 0
         if existing_files is not None and rel in existing_files:
             try:
                 if local_sha256(abs_path) == remote_sha256(remote_file, abs_path.stat().st_size):
-                    return rel, True, "已校验一致，跳过传输", path_size(abs_path)
+                    return rel, True, tr('已校验一致，跳过传输'), path_size(abs_path)
             except (OSError, RuntimeError, subprocess.TimeoutExpired):
                 # If the old remote item cannot be verified, the staged upload
                 # will safely replace it rather than trusting its name/size.
@@ -483,7 +484,7 @@ def _push_folder_files_parallel(
         futures = [executor.submit(push_one, item) for item in files]
         for future in as_completed(futures):
             if cancel_check():
-                failed = ("", "已取消")
+                failed = ("", tr('已取消'))
                 stop.set()
                 for pending in futures:
                     pending.cancel()
@@ -492,8 +493,8 @@ def _push_folder_files_parallel(
                 continue
             rel, ok, output, size = future.result()
             done += 1
-            if ok and output == "已校验一致，跳过传输":
-                log(f"复用已校验文件：{rel}")
+            if ok and output == tr('已校验一致，跳过传输'):
+                log(tr('复用已校验文件：{p0}', p0=rel))
             if not ok and failed is None:
                 failed = (rel, output)
                 stop.set()
@@ -502,12 +503,12 @@ def _push_folder_files_parallel(
             if progress and ok:
                 progress.file_completed(rel, size)
             elif progress is None and (done % milestone == 0 or done == total):
-                log(f"已处理 {done}/{total} 个文件")
+                log(tr('已处理 {p0}/{p1} 个文件', p0=done, p1=total))
 
     if failed:
         rel, output = failed
-        if output == "已取消":
-            return False, "已取消"
+        if output == tr('已取消'):
+            return False, tr('已取消')
         sample = files[0][0] if files else local
         return False, format_adb_failure(
             [output], sample, f"{remote.rstrip('/')}/{rel}"
@@ -528,12 +529,12 @@ def push_folder(
     if not remote_is_dir(remote):
         mkdir_err = (mkdir.stderr or mkdir.stdout or "").strip()
         if remote_is_file(remote):
-            return False, f"无法创建手机目录，同名路径已被文件占用：{remote}"
-        return False, f"无法创建手机目录 {remote}：{mkdir_err or '未知错误'}"
+            return False, tr('无法创建手机目录，同名路径已被文件占用：{p0}', p0=remote)
+        return False, tr('无法创建手机目录 {p0}：{p1}', p0=remote, p1=mkdir_err or tr('未知错误'))
 
     manifest = build_push_manifest(local)
     if not manifest.files:
-        log("文件夹为空，无需传输")
+        log(tr('文件夹为空，无需传输'))
         return True, remote
 
     # Always use per-file staging and verification, including overwrite mode.
@@ -554,11 +555,11 @@ def push_one(
     progress: FileProgressTracker | None = None,
 ) -> tuple[bool, str]:
     if cancel_check():
-        return False, "已取消"
+        return False, tr('已取消')
 
     src = Path(local)
     if not src.exists():
-        return False, f"本地文件不存在：{local}"
+        return False, tr('本地文件不存在：{p0}', p0=local)
 
     dest = dest.rstrip("/")
     ok, err = ensure_remote_dir(dest)
@@ -587,8 +588,8 @@ def push_one(
         progress.report(src.name)
     ok, output = push_file_verified(push_src, push_dst, cancel_check)
     if not ok:
-        if cancel_check() or output == "已取消":
-            return False, "已取消"
+        if cancel_check() or output == tr('已取消'):
+            return False, tr('已取消')
         return False, format_adb_failure([output], src, remote)
     if progress:
         progress.file_completed(src.name, file_bytes)
@@ -599,11 +600,11 @@ def push_one(
         if check.returncode == 0 and out:
             log(out)
         elif out:
-            log(f"传输完成（校验信息：{out}）")
+            log(tr('传输完成（校验信息：{p0}）', p0=out))
     except subprocess.TimeoutExpired:
-        log("传输完成（跳过后续校验）")
+        log(tr('传输完成（跳过后续校验）'))
     if Path(remote).name != src.name:
-        log(f"已保存为 {Path(remote).name}")
+        log(tr('已保存为 {p0}', p0=Path(remote).name))
     return True, remote
 
 
@@ -611,12 +612,12 @@ def explain_pull_error(text: str, remote: str, local: Path) -> str | None:
     lower = text.lower()
     if "no such file or directory" in lower:
         if "remote object" in lower or "does not exist" in lower:
-            return f"手机文件不存在或无法访问：{remote}"
-        return f"电脑目标路径不存在或无法写入：{local}"
+            return tr('手机文件不存在或无法访问：{p0}', p0=remote)
+        return tr('电脑目标路径不存在或无法写入：{p0}', p0=local)
     if "no space left" in lower or "not enough space" in lower:
-        return f"电脑磁盘空间不足，无法保存：{local.name}"
+        return tr('电脑磁盘空间不足，无法保存：{p0}', p0=local.name)
     if "permission denied" in lower:
-        return f"没有权限写入电脑目标路径：{local}"
+        return tr('没有权限写入电脑目标路径：{p0}', p0=local)
     return None
 
 
@@ -629,8 +630,8 @@ def format_pull_failure(lines: list[str], remote: str, local: Path) -> str:
     for line in reversed(lines):
         line = line.strip()
         if line and "pulled" not in line.lower():
-            return f"传输失败：{name}（{line}）"
-    return f"传输失败：{name}"
+            return tr('传输失败：{p0}（{p1}）', p0=name, p1=line)
+    return tr('传输失败：{p0}', p0=name)
 
 
 def run_adb_pull(
@@ -650,7 +651,7 @@ def run_adb_pull(
             if cancel_check():
                 proc.kill()
                 proc.communicate()
-                return False, ["已取消"]
+                return False, [tr('已取消')]
             try:
                 stdout, stderr = proc.communicate(timeout=0.25)
                 lines = [line for line in (stdout + "\n" + stderr).splitlines() if line.strip()]
@@ -674,21 +675,21 @@ def pull_file_verified(
     )
     try:
         if cancel_check():
-            return False, ["已取消"]
+            return False, [tr('已取消')]
         ok, lines = run_adb_pull(remote, str(temp), log, cancel_check)
         if not ok:
             return False, lines
         if cancel_check():
-            return False, ["已取消"]
+            return False, [tr('已取消')]
         digest = remote_sha256(remote, temp.stat().st_size)
         if local_sha256(temp) != digest:
-            return False, ["SHA-256 校验失败，电脑原文件未被覆盖"]
+            return False, [tr('SHA-256 校验失败，电脑原文件未被覆盖')]
         if cancel_check():
-            return False, ["已取消"]
+            return False, [tr('已取消')]
         os.replace(temp, local_target)
         return True, lines
     except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
-        return False, [f"安全下载失败：{exc}"]
+        return False, [tr('安全下载失败：{p0}', p0=exc)]
     finally:
         try:
             temp.unlink(missing_ok=True)
@@ -754,7 +755,7 @@ def pull_folder_files(
 
     for remote_file, size in files:
         if cancel_check():
-            return False, "已取消"
+            return False, tr('已取消')
         rel = posixpath.relpath(remote_file, remote)
         local_file = local / rel
         local_file.parent.mkdir(parents=True, exist_ok=True)
@@ -770,7 +771,7 @@ def pull_folder_files(
             progress.report(rel)
         ok, lines = pull_file_verified(remote_file, local_file, log, cancel_check)
         if not ok:
-            return False, "已取消" if cancel_check() else format_pull_failure(lines, remote_file, local_file)
+            return False, tr('已取消') if cancel_check() else format_pull_failure(lines, remote_file, local_file)
         if progress:
             progress.file_completed(rel, size)
     return True, str(local)
@@ -788,7 +789,7 @@ def pull_folder(
     remote = remote.rstrip("/")
     manifest = build_remote_manifest(remote)
     if not manifest.files:
-        log("文件夹为空，无需传输")
+        log(tr('文件夹为空，无需传输'))
         return True, local_dest
 
     name = posixpath.basename(remote)
@@ -820,11 +821,11 @@ def pull_one(
     progress: FileProgressTracker | None = None,
 ) -> tuple[bool, str]:
     if cancel_check():
-        return False, "已取消"
+        return False, tr('已取消')
 
     remote = remote.rstrip("/")
     if not remote_exists(remote):
-        return False, f"手机文件不存在：{remote}"
+        return False, tr('手机文件不存在：{p0}', p0=remote)
 
     ok, err = ensure_local_dir(dest)
     if not ok:
@@ -858,8 +859,8 @@ def pull_one(
         progress.report(name)
     ok, lines = pull_file_verified(remote, local_target, log, cancel_check)
     if not ok:
-        if cancel_check() or "已取消" in lines:
-            return False, "已取消"
+        if cancel_check() or tr('已取消') in lines:
+            return False, tr('已取消')
         return False, format_pull_failure(lines, remote, local_target)
     if progress:
         progress.file_completed(name, file_bytes)
